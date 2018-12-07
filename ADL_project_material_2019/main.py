@@ -195,7 +195,7 @@ def shallownn(x):
     h_pool1 = tf.layers.max_pooling2d(
         inputs=conv1,
         pool_size=[1, 20],
-        strides=2,
+        strides=[1, 20],
         name='pool1'
     )
     conv2 = tf.layers.conv2d(
@@ -211,11 +211,12 @@ def shallownn(x):
     h_pool2 = tf.layers.max_pooling2d(
         inputs=conv2,
         pool_size=[20, 1],
-        strides=2,
+        strides=[20, 1],
         name='pool2'
     )
-    h_pool2 = tf.reshape(h_pool2, [-1, 40, 31, 16])
-    merge_layer = tf.concat([h_pool1, h_pool2], axis=3)
+    h_pool1 = tf.reshape(h_pool1, [-1, 5120])
+    h_pool2 = tf.reshape(h_pool2, [-1, 5120])
+    merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
     y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
@@ -225,6 +226,7 @@ def shallownn(x):
 
     y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
+    
     return y_hat
 
 
