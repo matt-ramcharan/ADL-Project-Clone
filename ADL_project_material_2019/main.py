@@ -29,6 +29,7 @@ def sample(data):
     trainLabels = dataset[0:split - 1]["labels"]
     testBatch = dataset[split:]["data"]
     testLabels = dataset[split:]["labels"]
+    # import ipdb; ipdb.set_trace()
     return trainBatch, testBatch, trainLabels, testLabels
 
 
