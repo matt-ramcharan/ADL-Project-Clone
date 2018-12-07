@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 import pandas as pd
 import utils
+from math import ceil
 
 pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
@@ -234,26 +235,38 @@ tf.reset_default_graph()
 g = tf.get_default_graph()
 with g.as_default():
     with tf.Session() as sess:
+        print("Starting data loading")
         train, test, train_l, test_l = sample(dataset)
+        print("Finished data loading")
         # print(train_l)
 
-        train_batch_size = 1
-        test_batch_size = 1 
+        train_batch_size = 1000
+        test_batch_size  = 1000
+
+        total_iteration_amount = 100000
+        epoch_am = ceil(total_iteration_amount / len(train))
+    
+        print('Running ' + str(total_iteration_amount) + ' iteration over '
+            + str(epoch_am) + ' epochs')
 
         train_dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     tf.cast(train, tf.float32),
                     tf.cast(train_l, tf.float32)
                 )
-                ).batch(train_batch_size)
+                ).batch(train_batch_size).repeat(epoch_am)
         test_dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     tf.cast(test, tf.float32),
-                    tf.cast(test_l, tf.int32)
+                    tf.cast(test_l, tf.float32)
                 )
                 ).batch(test_batch_size)
 
-        iterator = train_dataset.make_one_shot_iterator()
+        iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                                   train_dataset.output_shapes)
+
+        train_init_op = iterator.make_initializer(train_dataset)
+        test_init_op  = iterator.make_initializer(test_dataset)
 
         with tf.variable_scope("inputs"):
             x, y = iterator.get_next()
@@ -262,16 +275,32 @@ with g.as_default():
 
             y_hat = shallownn(x);
 
-            print(y.dtype)
-            print(y_hat.dtype)
-
             cross_entropy = tf.keras.backend.categorical_crossentropy(y_hat, y)
             optimiser = tf.train.AdamOptimizer().minimize(cross_entropy)
+
+            accuracy = tf.reduce_mean(
+                       tf.cast(
+                       tf.math.equal(
+                       tf.argmax(y_hat, axis=1),
+                       tf.argmax(y, axis=1)),
+                       tf.float32))
 
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
 
-        for _ in range(100):
-            print(_)
-            sess.run(optimiser)
-            # sess.run(optimiser) 
+        sess.run(train_init_op)
+        for iteration in range (0, total_iteration_amount, train_batch_size):
+            if (iteration % len(train) == 0):
+                print('Running Epoch ' + str(int(iteration / len(train))))
+            if (iteration % 1000 == 0):
+                acc = sess.run(accuracy)
+                print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
+            else:
+                sess.run(optimiser) 
+
+        sess.run(test_init_op)
+        total_acc = 0;
+        for iteration in range (0, len(test), test_batch_size):
+            total_acc += sess.run(accuracy)
+        total_acc /= (len(test) / test_batch_size)
+        print('Test data accuracy is %.2f' % (total_acc))
