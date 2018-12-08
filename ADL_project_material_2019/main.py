@@ -240,8 +240,8 @@ with g.as_default():
         print("Finished data loading")
         # print(train_l)
 
-        train_batch_size = 1000
-        test_batch_size  = 1000
+        train_batch_size = 100
+        test_batch_size  = 100
 
         total_iteration_amount = 100000
         epoch_am = ceil(total_iteration_amount / len(train))
@@ -254,7 +254,7 @@ with g.as_default():
                     tf.cast(train, tf.float32),
                     tf.cast(train_l, tf.float32)
                 )
-                ).batch(train_batch_size).repeat(epoch_am)
+                ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
         test_dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     tf.cast(test, tf.float32),
@@ -292,7 +292,7 @@ with g.as_default():
         for iteration in range (0, total_iteration_amount, train_batch_size):
             if (iteration % len(train) == 0):
                 print('Running Epoch ' + str(int(iteration / len(train))))
-            if (iteration % 1000 == 0):
+            if (iteration % (train_batch_size * 10) == 0):
                 acc = sess.run(accuracy)
                 print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
             else:
