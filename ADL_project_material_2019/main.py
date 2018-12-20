@@ -170,14 +170,19 @@ def deepnn(x):
         strides=2,
         name='pool2_4'
     )
-    h_pool2_4 = tf.reshape(h_pool2_4, [-1, 5, 3, 128])
-    merge_layer = tf.concat([h_pool1_4, h_pool2_4], axis=3)
-    dropout_layer = tf.layers.dropout(merge_layer, rate=0.25, name="dropout_layer")
+    h_pool1 = tf.reshape(h_pool1_4, [-1, 96000])
+    h_pool2 = tf.reshape(h_pool2_4, [-1, 96000])
+    merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
+    dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
     y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
-    y_hat = tf.layers.dense(inputs=y_1, units=10, kernel_initializer=xavier_initializer,
+
+    y_1_soft = tf.nn.softmax(y_1)
+
+    y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
+
     return y_hat
 
 
@@ -219,11 +224,11 @@ def shallownn(x):
     h_pool2 = tf.reshape(h_pool2, [-1, 5120])
     merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
-    y_1_soft = tf.nn.softmax(y_1)
+    y_1_soft = y_1 # tf.nn.softmax(y_1)
 
     y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
@@ -240,8 +245,10 @@ with g.as_default():
         print("Finished data loading")
         # print(train_l)
 
-        train_batch_size = 100
-        test_batch_size  = 100
+        learning_rate = 0.00005
+
+        train_batch_size = 50
+        test_batch_size  = 50
 
         total_iteration_amount = 100000
         epoch_am = ceil(total_iteration_amount / len(train))
@@ -269,14 +276,14 @@ with g.as_default():
         test_init_op  = iterator.make_initializer(test_dataset)
 
         with tf.variable_scope("inputs"):
-            x, y = iterator.get_next()
             # x = tf.placeholder(tf.float32, [None, 80, 80])
             # y = tf.placeholder(tf.float32, [None, 10])
+            x, y = iterator.get_next()
 
-            y_hat = shallownn(x);
+            y_hat = shallownn(x)
 
             cross_entropy = tf.keras.backend.categorical_crossentropy(y_hat, y)
-            optimiser = tf.train.AdamOptimizer().minimize(cross_entropy)
+            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
             accuracy = tf.reduce_mean(
                        tf.cast(
@@ -291,7 +298,7 @@ with g.as_default():
         sess.run(train_init_op)
         for iteration in range (0, total_iteration_amount, train_batch_size):
             if (iteration % len(train) == 0):
-                print('Running Epoch ' + str(int(iteration / len(train))))
+                print('Running Epoch ' + str(int(iteration / len(train))) *100 )
             if (iteration % (train_batch_size * 10) == 0):
                 acc = sess.run(accuracy)
                 print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
