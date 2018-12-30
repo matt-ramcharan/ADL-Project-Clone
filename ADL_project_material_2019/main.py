@@ -5,7 +5,7 @@ import pandas as pd
 import utils
 from math import ceil
 
-pickle_in = open("music_genres_dataset.pkl", "rb")
+pickle_in = open("music_genres_dataset_new.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
 dataset = dataset.sample(frac=1).reset_index(drop=True)
@@ -24,10 +24,16 @@ def bias_variable(shape):
     return tf.Variable(initial, name='biases')
 
 
+
+
 def sample(data):
+    # data = utils.augment(data)
+    print("Data Augmented")
     dataset = data.sample(frac=1).reset_index(drop=True)
-    split = 10000
+
+    split = 3000
     trainBatch  = list(np.row_stack(dataset[0:split - 1]["data"].values))
+
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
 
     trainLabels = pd.get_dummies(dataset[0:split - 1]["labels"]).values
@@ -39,9 +45,26 @@ def sample(data):
     # import ipdb; ipdb.set_trace()
     return trainBatch, testBatch, trainLabels, testLabels
 
+#
+#    dataset = data.sample(frac=1).reset_index(drop=True)[0:15]
+#    split = 10
+#    trainBatch  = list(np.row_stack(dataset[0:split-1]["data"].values))
+#    print("Data Augmented")
+#    trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
+#
+#    trainLabels = pd.get_dummies(dataset["labels"]).values
+#
+#    testBatch   = np.row_stack(dataset[split:]["data"].values)
+#    testBatch  = np.array(list(map(utils.melspectrogram, testBatch)))
+#
+#    testLabels  = pd.get_dummies(dataset[split:]["labels"]).values
+#    # import ipdb; ipdb.set_trace()
+#    return trainBatch, testBatch, trainLabels, testLabels
+
 
 def deepnn(x):
     x = tf.reshape(x, [-1, 80, 80, 1])
+
     conv1_1 = tf.layers.conv2d(
         inputs=x,
         filters=16,
@@ -55,13 +78,13 @@ def deepnn(x):
     h_pool1_1 = tf.layers.max_pooling2d(
         inputs=conv1_1,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool1_1'
     )
     conv2_1 = tf.layers.conv2d(
         inputs=x,
         filters=16,
-        kernel_size=[21, 20],
+    kernel_size=[21, 10],
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
@@ -71,9 +94,10 @@ def deepnn(x):
     h_pool2_1 = tf.layers.max_pooling2d(
         inputs=conv2_1,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool2_1'
     )
+
     conv1_2 = tf.layers.conv2d(
         inputs=h_pool1_1,
         filters=32,
@@ -87,8 +111,8 @@ def deepnn(x):
     h_pool1_2 = tf.layers.max_pooling2d(
         inputs=conv1_2,
         pool_size=[2, 2],
-        strides=2,
-        name='pool1_1'
+        strides=[2, 2],
+        name='pool1_2'
     )
     conv2_2 = tf.layers.conv2d(
         inputs=h_pool2_1,
@@ -103,9 +127,10 @@ def deepnn(x):
     h_pool2_2 = tf.layers.max_pooling2d(
         inputs=conv2_2,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool2_2'
     )
+
     conv1_3 = tf.layers.conv2d(
         inputs=h_pool1_2,
         filters=64,
@@ -119,7 +144,7 @@ def deepnn(x):
     h_pool1_3 = tf.layers.max_pooling2d(
         inputs=conv1_3,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool1_3'
     )
     conv2_3 = tf.layers.conv2d(
@@ -135,9 +160,10 @@ def deepnn(x):
     h_pool2_3 = tf.layers.max_pooling2d(
         inputs=conv2_3,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool2_3'
     )
+
     conv1_4 = tf.layers.conv2d(
         inputs=h_pool1_3,
         filters=128,
@@ -151,7 +177,7 @@ def deepnn(x):
     h_pool1_4 = tf.layers.max_pooling2d(
         inputs=conv1_4,
         pool_size=[1, 5],
-        strides=2,
+        strides=[1, 5],
         name='pool1_4'
     )
     conv2_4 = tf.layers.conv2d(
@@ -167,14 +193,17 @@ def deepnn(x):
     h_pool2_4 = tf.layers.max_pooling2d(
         inputs=conv2_4,
         pool_size=[5, 1],
-        strides=2,
+        strides=[5, 1],
         name='pool2_4'
     )
-    h_pool1 = tf.reshape(h_pool1_4, [-1, 96000])
-    h_pool2 = tf.reshape(h_pool2_4, [-1, 96000])
+
+
+
+    h_pool1 = tf.reshape(h_pool1_4, [-1, 128000])
+    h_pool2 = tf.reshape(h_pool2_4, [-1, 128000])
     merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
@@ -182,7 +211,6 @@ def deepnn(x):
 
     y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
-
     return y_hat
 
 
@@ -228,86 +256,90 @@ def shallownn(x):
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
-    y_1_soft = y_1 # tf.nn.softmax(y_1)
+    y_1_soft = tf.nn.softmax(y_1)
 
     y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
-    
+
     return y_hat
 
+def main(_):
+    tf.reset_default_graph()
+    g = tf.get_default_graph()
+    with g.as_default():
+        with tf.Session() as sess:
+            print("Starting data loading")
+            train, test, train_l, test_l = sample(dataset)
+            print("Finished data loading")
+            # print(train_l)
 
-tf.reset_default_graph()
-g = tf.get_default_graph()
-with g.as_default():
-    with tf.Session() as sess:
-        print("Starting data loading")
-        train, test, train_l, test_l = sample(dataset)
-        print("Finished data loading")
-        # print(train_l)
+            learning_rate = 0.00005
 
-        learning_rate = 0.00005
+            train_batch_size = 10
+            test_batch_size  = 10
 
-        train_batch_size = 50
-        test_batch_size  = 50
+            total_iteration_amount = 100000 * 20
+            epoch_am = ceil(total_iteration_amount / len(train))
 
-        total_iteration_amount = 100000
-        epoch_am = ceil(total_iteration_amount / len(train))
-    
-        print('Running ' + str(total_iteration_amount) + ' iteration over '
-            + str(epoch_am) + ' epochs')
+            print('Running ' + str(total_iteration_amount) + ' iteration over '
+                + str(epoch_am) + ' epochs')
 
-        train_dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    tf.cast(train, tf.float32),
-                    tf.cast(train_l, tf.float32)
-                )
-                ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
-        test_dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    tf.cast(test, tf.float32),
-                    tf.cast(test_l, tf.float32)
-                )
-                ).batch(test_batch_size)
+            train_dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        tf.cast(train, tf.float32),
+                        tf.cast(train_l, tf.float32)
+                    )
+                    ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
+            test_dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        tf.cast(test, tf.float32),
+                        tf.cast(test_l, tf.float32)
+                    )
+                    ).batch(test_batch_size)
 
-        iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
-                                                   train_dataset.output_shapes)
+            iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                                       train_dataset.output_shapes)
 
-        train_init_op = iterator.make_initializer(train_dataset)
-        test_init_op  = iterator.make_initializer(test_dataset)
+            train_init_op = iterator.make_initializer(train_dataset)
+            test_init_op  = iterator.make_initializer(test_dataset)
 
-        with tf.variable_scope("inputs"):
-            # x = tf.placeholder(tf.float32, [None, 80, 80])
-            # y = tf.placeholder(tf.float32, [None, 10])
-            x, y = iterator.get_next()
+            with tf.variable_scope("inputs"):
+                # x = tf.placeholder(tf.float32, [None, 80, 80])
+                # y = tf.placeholder(tf.float32, [None, 10])
+                x, y = iterator.get_next()
 
-            y_hat = shallownn(x)
+                y_hat = shallownn(x)
 
-            cross_entropy = tf.keras.backend.categorical_crossentropy(y_hat, y)
-            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+                cross_entropy = tf.keras.backend.categorical_crossentropy(y, y_hat, from_logits=True)
+                optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
-            accuracy = tf.reduce_mean(
-                       tf.cast(
-                       tf.math.equal(
-                       tf.argmax(y_hat, axis=1),
-                       tf.argmax(y, axis=1)),
-                       tf.float32))
+                accuracy = tf.reduce_mean(
+                           tf.cast(
+                           tf.math.equal(
+                           tf.argmax(y_hat, axis=1),
+                           tf.argmax(y, axis=1)),
+                           tf.float32))
 
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.local_variables_initializer())
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
 
-        sess.run(train_init_op)
-        for iteration in range (0, total_iteration_amount, train_batch_size):
-            if (iteration % len(train) == 0):
-                print('Running Epoch ' + str(int(iteration / len(train))) *100 )
-            if (iteration % (train_batch_size * 10) == 0):
-                acc = sess.run(accuracy)
-                print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
-            else:
-                sess.run(optimiser) 
+            print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
+            sess.run(train_init_op)
+            for iteration in range (0, total_iteration_amount, train_batch_size):
+                if (iteration % (len(train)+1) == 0):
+                    print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
+                elif (iteration % (train_batch_size * 10) == 0):
+                    acc = sess.run(accuracy)
+                    print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
+                else:
+                    sess.run(optimiser)
 
-        sess.run(test_init_op)
-        total_acc = 0;
-        for iteration in range (0, len(test), test_batch_size):
-            total_acc += sess.run(accuracy)
-        total_acc /= (len(test) / test_batch_size)
-        print('Test data accuracy is %.2f' % (total_acc))
+            sess.run(test_init_op)
+            total_acc = 0;
+            for iteration in range (0, len(test), test_batch_size):
+                total_acc += sess.run(accuracy)
+            total_acc /= (len(test) / test_batch_size)
+            print('Test data accuracy is %.2f' % (total_acc))
+
+if __name__ == '__main__':
+    tf.app.run(main=main)
