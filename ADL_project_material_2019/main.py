@@ -8,7 +8,6 @@ from math import ceil
 pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
-dataset = dataset.sample(frac=1).reset_index(drop=True)
 xavier_initializer = tf.contrib.layers.xavier_initializer(uniform=True)
 
 
@@ -28,6 +27,7 @@ def sample(data):
     dataset = data.sample(frac=1).reset_index(drop=True)
     split = 10000
     trainBatch  = list(np.row_stack(dataset[0:split - 1]["data"].values))
+
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
 
     trainLabels = pd.get_dummies(dataset[0:split - 1]["labels"]).values
@@ -230,77 +230,93 @@ def shallownn(x):
     
     return y_hat
 
+def main(_):
+    tf.reset_default_graph()
+    g = tf.get_default_graph()
+    with g.as_default():
+        with tf.Session() as sess:
 
-tf.reset_default_graph()
-g = tf.get_default_graph()
-with g.as_default():
-    with tf.Session() as sess:
-        print("Starting data loading")
-        train, test, train_l, test_l = sample(dataset)
-        print("Finished data loading")
-        # print(train_l)
+            #place = tf.placeholder(tf.float32, shape=(9999, 80, 80))
 
-        train_batch_size = 100
-        test_batch_size  = 100
+            print("Starting data loading")
+            train, test, train_l, test_l = sample(dataset)
+            print("Finished data loading")
+            # print(train_l)
 
-        total_iteration_amount = 100000
-        epoch_am = ceil(total_iteration_amount / len(train))
-    
-        print('Running ' + str(total_iteration_amount) + ' iteration over '
-            + str(epoch_am) + ' epochs')
+            #train_set = tf.Variable(tf.zeros([9999, 80, 80], dtype=tf.float32))
+            #set_train = train_set.assign(place)
 
-        train_dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    tf.cast(train, tf.float32),
-                    tf.cast(train_l, tf.float32)
-                )
-                ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
-        test_dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    tf.cast(test, tf.float32),
-                    tf.cast(test_l, tf.float32)
-                )
-                ).batch(test_batch_size)
+            #sess.run(set_train, feed_dict={place: train})
 
-        iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
-                                                   train_dataset.output_shapes)
+            learning_rate = 0.00005
 
-        train_init_op = iterator.make_initializer(train_dataset)
-        test_init_op  = iterator.make_initializer(test_dataset)
+            train_batch_size = 30
+            test_batch_size  = 30
 
-        with tf.variable_scope("inputs"):
-            x, y = iterator.get_next()
-            # x = tf.placeholder(tf.float32, [None, 80, 80])
-            # y = tf.placeholder(tf.float32, [None, 10])
+            total_iteration_amount = 100000 * 20
+            epoch_am = ceil(total_iteration_amount / len(train))
 
-            y_hat = shallownn(x);
+            print('Running ' + str(total_iteration_amount) + ' iteration over '
+                + str(epoch_am) + ' epochs')
 
-            cross_entropy = tf.keras.backend.categorical_crossentropy(y_hat, y)
-            optimiser = tf.train.AdamOptimizer().minimize(cross_entropy)
+            train_dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        tf.cast(train, tf.float32),
+                        tf.cast(train_l, tf.float32)
+                    )
+                    ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
+            test_dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        tf.cast(test, tf.float32),
+                        tf.cast(test_l, tf.float32)
+                    )
+                    ).batch(test_batch_size)
 
-            accuracy = tf.reduce_mean(
-                       tf.cast(
-                       tf.math.equal(
-                       tf.argmax(y_hat, axis=1),
-                       tf.argmax(y, axis=1)),
-                       tf.float32))
+            iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                                       train_dataset.output_shapes)
 
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.local_variables_initializer())
+            train_init_op = iterator.make_initializer(train_dataset)
+            test_init_op  = iterator.make_initializer(test_dataset)
 
-        sess.run(train_init_op)
-        for iteration in range (0, total_iteration_amount, train_batch_size):
-            if (iteration % len(train) == 0):
-                print('Running Epoch ' + str(int(iteration / len(train))))
-            if (iteration % (train_batch_size * 10) == 0):
-                acc = sess.run(accuracy)
-                print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
-            else:
-                sess.run(optimiser) 
+            with tf.variable_scope("inputs"):
+                # x = tf.placeholder(tf.float32, [None, 80, 80])
+                # y = tf.placeholder(tf.float32, [None, 10])
+                x, y = iterator.get_next()
 
-        sess.run(test_init_op)
-        total_acc = 0;
-        for iteration in range (0, len(test), test_batch_size):
-            total_acc += sess.run(accuracy)
-        total_acc /= (len(test) / test_batch_size)
-        print('Test data accuracy is %.2f' % (total_acc))
+                y_hat = shallownn(x)
+
+                cross_entropy = tf.keras.backend.categorical_crossentropy(y, y_hat, from_logits=True)
+                optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+
+                accuracy = tf.reduce_mean(
+                           tf.cast(
+                           tf.math.equal(
+                           tf.argmax(y_hat, axis=1),
+                           tf.argmax(y, axis=1)),
+                           tf.float32))
+
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
+
+            print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
+            sess.run(train_init_op)
+            for iteration in range (0, total_iteration_amount, train_batch_size):
+                if (iteration % (len(train)+1) == 0):
+                    print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
+                elif (iteration % (train_batch_size * 10) == 0):
+                    acc = sess.run(accuracy)
+                    print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
+                else:
+                    sess.run(optimiser)
+
+            sess.run(test_init_op)
+            total_acc = 0;
+            for iteration in range (0, len(test), test_batch_size):
+                total_acc += sess.run(accuracy)
+            total_acc /= (len(test) / test_batch_size)
+            print('Test data accuracy is %.2f' % (total_acc))
+
+
+if __name__ == '__main__':
+    tf.app.run(main=main)
+
