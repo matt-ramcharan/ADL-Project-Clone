@@ -4,7 +4,9 @@ import pickle
 import pandas as pd
 import utils
 from math import ceil
+import os
 
+logdir = '{cwd}/logs/'.format(cwd=os.getcwd())
 pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
@@ -253,7 +255,7 @@ def main(_):
             train_batch_size = 30
             test_batch_size  = 30
 
-            total_iteration_amount = 100000 * 20
+            total_iteration_amount = 1000 * 20
             epoch_am = ceil(total_iteration_amount / len(train))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -285,15 +287,30 @@ def main(_):
 
                 y_hat = shallownn(x)
 
+            with tf.variable_scope("cross_entropy"):
                 cross_entropy = tf.keras.backend.categorical_crossentropy(y, y_hat, from_logits=True)
-                optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
+            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+
+            with tf.name_scope("accuracy"):
                 accuracy = tf.reduce_mean(
                            tf.cast(
                            tf.math.equal(
                            tf.argmax(y_hat, axis=1),
                            tf.argmax(y, axis=1)),
                            tf.float32))
+
+            loss_summary = tf.summary.scalar('Loss', cross_entropy)
+            acc_summary = tf.summary.scalar('Accuracy', accuracy)
+
+            train_data_sum = tf.summary.audio('Input_Train_Audio', train, 22050)
+            test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
+
+            train_summary = tf.summary.merge([train_data_sum, acc_summary])
+            test_summary = tf.summary.merge([test_data_sum, acc_summary])
+
+            summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph)
+            summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph)
 
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
@@ -304,7 +321,8 @@ def main(_):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
                 elif (iteration % (train_batch_size * 10) == 0):
-                    acc = sess.run(accuracy)
+                    acc, summary = sess.run([accuracy, train_summary])
+                    summary_writer.add_summary(summary, iteration)
                     print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
                 else:
                     sess.run(optimiser)
@@ -315,6 +333,8 @@ def main(_):
                 total_acc += sess.run(accuracy)
             total_acc /= (len(test) / test_batch_size)
             print('Test data accuracy is %.2f' % (total_acc))
+
+
 
 
 if __name__ == '__main__':
