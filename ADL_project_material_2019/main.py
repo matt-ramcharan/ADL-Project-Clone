@@ -5,10 +5,13 @@ import pandas as pd
 import utils
 from math import ceil
 
-pickle_in = open("music_genres_dataset_new.pkl", "rb")
+pickle_in_a = open("music_genres_dataset_aug.pkl", "rb")
+dataset_a = pd.DataFrame.from_dict(pickle.load(pickle_in_a))
+
+pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
-dataset = dataset.sample(frac=1).reset_index(drop=True)
+# dataset = dataset.sample(frac=1).reset_index(drop=True)
 xavier_initializer = tf.contrib.layers.xavier_initializer(uniform=True)
 
 
@@ -26,40 +29,28 @@ def bias_variable(shape):
 
 
 
-def sample(data):
-    # data = utils.augment(data)
-    print("Data Augmented")
-    dataset = data.sample(frac=1).reset_index(drop=True)
+def sample(data, data_a):
+    # data = data[0::9]
 
-    split = 3000
-    trainBatch  = list(np.row_stack(dataset[0:split - 1]["data"].values))
+    data_a = pd.DataFrame([[row.get("data"), row.get("labels"), row.get("track_id")]  for idx, row in data_a.iterrows() if idx % 9 != 0],
+                        columns=["data", "labels", "track_id"])
+    print("We Gucci")
+    dataset = data.sample(frac=1).reset_index(drop=True)
+    dataset_a = data_a.sample(frac=1).reset_index(drop=True)
+
+    split = 10000
+    trainBatch  = list(np.row_stack(dataset_a["data"].values))
 
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
 
-    trainLabels = pd.get_dummies(dataset[0:split - 1]["labels"]).values
+    trainLabels = pd.get_dummies(dataset_a["labels"]).values
 
-    testBatch   = np.row_stack(dataset[split:]["data"].values)
+    testBatch   = np.row_stack(dataset["data"].values)
     testBatch  = np.array(list(map(utils.melspectrogram, testBatch)))
 
-    testLabels  = pd.get_dummies(dataset[split:]["labels"]).values
+    testLabels  = pd.get_dummies(dataset["labels"]).values
     # import ipdb; ipdb.set_trace()
     return trainBatch, testBatch, trainLabels, testLabels
-
-#
-#    dataset = data.sample(frac=1).reset_index(drop=True)[0:15]
-#    split = 10
-#    trainBatch  = list(np.row_stack(dataset[0:split-1]["data"].values))
-#    print("Data Augmented")
-#    trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
-#
-#    trainLabels = pd.get_dummies(dataset["labels"]).values
-#
-#    testBatch   = np.row_stack(dataset[split:]["data"].values)
-#    testBatch  = np.array(list(map(utils.melspectrogram, testBatch)))
-#
-#    testLabels  = pd.get_dummies(dataset[split:]["labels"]).values
-#    # import ipdb; ipdb.set_trace()
-#    return trainBatch, testBatch, trainLabels, testLabels
 
 
 def deepnn(x):
@@ -268,15 +259,23 @@ def main(_):
     g = tf.get_default_graph()
     with g.as_default():
         with tf.Session() as sess:
+
+            #place = tf.placeholder(tf.float32, shape=(9999, 80, 80))
+
             print("Starting data loading")
-            train, test, train_l, test_l = sample(dataset)
+            train, test, train_l, test_l = sample(dataset, dataset_a)
             print("Finished data loading")
             # print(train_l)
 
+            train_set = tf.Variable(tf.zeros([9999, 80, 80], dtype=tf.float32))
+            set_train = train_set.assign(place)
+
+            sess.run(set_train, feed_dict={place: train})
+
             learning_rate = 0.00005
 
-            train_batch_size = 10
-            test_batch_size  = 10
+            train_batch_size = 30
+            test_batch_size  = 30
 
             total_iteration_amount = 100000 * 20
             epoch_am = ceil(total_iteration_amount / len(train))
@@ -286,7 +285,8 @@ def main(_):
 
             train_dataset = tf.data.Dataset.from_tensor_slices(
                     (
-                        tf.cast(train, tf.float32),
+                        # tf.cast(train, tf.float32),
+                        train_set,
                         tf.cast(train_l, tf.float32)
                     )
                     ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
