@@ -41,6 +41,8 @@ def sample(data):
     # import ipdb; ipdb.set_trace()
     return trainBatch, testBatch, trainLabels, testLabels
 
+leaky_relu = lambda x:tf.nn.leaky_relu(x, alpha=0.3)
+
 
 def deepnn(x):
     x = tf.reshape(x, [-1, 80, 80, 1])
@@ -51,7 +53,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_1'
     )
     h_pool1_1 = tf.layers.max_pooling2d(
@@ -67,7 +69,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_1'
     )
     h_pool2_1 = tf.layers.max_pooling2d(
@@ -83,7 +85,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_2'
     )
     h_pool1_2 = tf.layers.max_pooling2d(
@@ -99,7 +101,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_2'
     )
     h_pool2_2 = tf.layers.max_pooling2d(
@@ -115,7 +117,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_3'
     )
     h_pool1_3 = tf.layers.max_pooling2d(
@@ -131,7 +133,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_3'
     )
     h_pool2_3 = tf.layers.max_pooling2d(
@@ -147,7 +149,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_4'
     )
     h_pool1_4 = tf.layers.max_pooling2d(
@@ -163,7 +165,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_4'
     )
     h_pool2_4 = tf.layers.max_pooling2d(
@@ -192,7 +194,7 @@ def shallownn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1'
     )
     h_pool1 = tf.layers.max_pooling2d(
@@ -208,7 +210,7 @@ def shallownn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2'
     )
     h_pool2 = tf.layers.max_pooling2d(
@@ -221,13 +223,13 @@ def shallownn(x):
     h_pool2 = tf.reshape(h_pool2, [-1, 5120])
     merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=leaky_relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
-    y_1_soft = tf.nn.softmax(y_1)
+    # y_1_soft = tf.nn.softmax(y_1)
 
-    y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
+    y_hat = tf.layers.dense(inputs=y_1, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
     
     return y_hat
@@ -252,10 +254,10 @@ def main(_):
 
             learning_rate = 0.00005
 
-            train_batch_size = 30
-            test_batch_size  = 30
+            train_batch_size = 64
+            test_batch_size  = 64
 
-            total_iteration_amount = 10000 * 200
+            total_iteration_amount = 10000 * 100
             epoch_am = ceil(total_iteration_amount / len(train))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -290,9 +292,17 @@ def main(_):
             with tf.variable_scope("cross_entropy"):
                 cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
 
+            l1_regularizer = tf.contrib.layers.l1_regularizer(
+               scale=0.0001, scope=None
+            )
+            weights = tf.trainable_variables() # all vars of your graph
+            regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer, weights)
+            
+            regularized_loss = cross_entropy + regularization_penalty # this loss needs to be minimized
+
             print(cross_entropy.get_shape)
 
-            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
 
             with tf.name_scope("accuracy"):
                 accuracy = tf.reduce_mean(
