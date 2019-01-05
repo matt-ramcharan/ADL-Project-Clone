@@ -6,7 +6,7 @@ import utils
 from math import ceil
 import os
 
-logdir = '{cwd}/logs/'.format(cwd=os.getcwd())
+logdir = '{cwd}/logs/log'.format(cwd=os.getcwd())
 pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
@@ -255,7 +255,7 @@ def main(_):
             train_batch_size = 30
             test_batch_size  = 30
 
-            total_iteration_amount = 1000 * 20
+            total_iteration_amount = 10000 * 200
             epoch_am = ceil(total_iteration_amount / len(train))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -266,7 +266,7 @@ def main(_):
                         tf.cast(train, tf.float32),
                         tf.cast(train_l, tf.float32)
                     )
-                    ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
+                    ).batch(train_batch_size).repeat(epoch_am)
             test_dataset = tf.data.Dataset.from_tensor_slices(
                     (
                         tf.cast(test, tf.float32),
@@ -288,7 +288,9 @@ def main(_):
                 y_hat = shallownn(x)
 
             with tf.variable_scope("cross_entropy"):
-                cross_entropy = tf.keras.backend.categorical_crossentropy(y, y_hat, from_logits=True)
+                cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
+
+            print(cross_entropy.get_shape)
 
             optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
@@ -301,16 +303,16 @@ def main(_):
                            tf.float32))
 
             loss_summary = tf.summary.scalar('Loss', cross_entropy)
-            acc_summary = tf.summary.scalar('Accuracy', accuracy)
+            acc_summary  = tf.summary.scalar('Accuracy', accuracy)
 
-            train_data_sum = tf.summary.audio('Input_Train_Audio', train, 22050)
-            test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
+            # train_data_sum = tf.summary.audio('Input_Train_Audio', train, 22050)
+            # test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
 
-            train_summary = tf.summary.merge([train_data_sum, acc_summary])
-            test_summary = tf.summary.merge([test_data_sum, acc_summary])
+            train_summary = tf.summary.merge([acc_summary, loss_summary])
+            test_summary = tf.summary.merge([acc_summary, loss_summary])
 
-            summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph)
-            summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph)
+            summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph, flush_secs=5)
+            summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph, flush_secs=5)
 
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
@@ -320,9 +322,10 @@ def main(_):
             for iteration in range (0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
-                elif (iteration % (train_batch_size * 10) == 0):
+                elif (iteration % (train_batch_size * 40) == 0):
                     acc, summary = sess.run([accuracy, train_summary])
                     summary_writer.add_summary(summary, iteration)
+                    summary_writer.flush()
                     print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
                 else:
                     sess.run(optimiser)
