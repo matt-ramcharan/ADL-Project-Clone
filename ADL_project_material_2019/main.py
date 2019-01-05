@@ -59,7 +59,7 @@ def deepnn(x):
     h_pool1_1 = tf.layers.max_pooling2d(
         inputs=conv1_1,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool1_1'
     )
     conv2_1 = tf.layers.conv2d(
@@ -75,7 +75,7 @@ def deepnn(x):
     h_pool2_1 = tf.layers.max_pooling2d(
         inputs=conv2_1,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool2_1'
     )
     conv1_2 = tf.layers.conv2d(
@@ -91,7 +91,7 @@ def deepnn(x):
     h_pool1_2 = tf.layers.max_pooling2d(
         inputs=conv1_2,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool1_1'
     )
     conv2_2 = tf.layers.conv2d(
@@ -123,7 +123,7 @@ def deepnn(x):
     h_pool1_3 = tf.layers.max_pooling2d(
         inputs=conv1_3,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool1_3'
     )
     conv2_3 = tf.layers.conv2d(
@@ -139,7 +139,7 @@ def deepnn(x):
     h_pool2_3 = tf.layers.max_pooling2d(
         inputs=conv2_3,
         pool_size=[2, 2],
-        strides=2,
+        strides=[2, 2],
         name='pool2_3'
     )
     conv1_4 = tf.layers.conv2d(
@@ -155,7 +155,7 @@ def deepnn(x):
     h_pool1_4 = tf.layers.max_pooling2d(
         inputs=conv1_4,
         pool_size=[1, 5],
-        strides=2,
+        strides=[1, 5],
         name='pool1_4'
     )
     conv2_4 = tf.layers.conv2d(
@@ -171,11 +171,15 @@ def deepnn(x):
     h_pool2_4 = tf.layers.max_pooling2d(
         inputs=conv2_4,
         pool_size=[5, 1],
-        strides=2,
+        strides=[5, 1],
         name='pool2_4'
     )
-    h_pool2_4 = tf.reshape(h_pool2_4, [-1, 5, 3, 128])
-    merge_layer = tf.concat([h_pool1_4, h_pool2_4], axis=3)
+
+    print(h_pool1_4.get_shape())
+    print(h_pool2_4.get_shape())
+    h_pool1_4 = tf.reshape(h_pool1_4, [-1, 2560])
+    h_pool2_4 = tf.reshape(h_pool2_4, [-1, 2560])
+    merge_layer = tf.concat([h_pool1_4, h_pool2_4], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.25, name="dropout_layer")
     y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
@@ -257,7 +261,7 @@ def main(_):
             train_batch_size = 64
             test_batch_size  = 64
 
-            total_iteration_amount = 10000 * 100
+            total_iteration_amount = 10000 * 40
             epoch_am = ceil(total_iteration_amount / len(train))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -287,7 +291,7 @@ def main(_):
                 # y = tf.placeholder(tf.float32, [None, 10])
                 x, y = iterator.get_next()
 
-                y_hat = shallownn(x)
+                y_hat = deepnn(x)
 
             with tf.variable_scope("cross_entropy"):
                 cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
