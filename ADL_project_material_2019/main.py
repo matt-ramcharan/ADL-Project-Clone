@@ -33,22 +33,22 @@ def sample(data, data_a):
     # data = data[0::9]
 
     data_a = pd.DataFrame([[row.get("data"), row.get("labels"), row.get("track_id")]  for idx, row in data_a.iterrows() if idx % 9 != 0],
-                        columns=["data", "labels", "track_id"])
-    print("We Gucci")
+                        columns=["data", "labels", "track_id"])[0:40000]
+
     dataset = data.sample(frac=1).reset_index(drop=True)
     dataset_a = data_a.sample(frac=1).reset_index(drop=True)
 
     split = 10000
-    trainBatch  = list(np.row_stack(dataset_a["data"].values))
+    trainBatch  = np.row_stack(dataset_a["data"].values)
 
-    trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
+    trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)), dtype=np.float32)
 
-    trainLabels = pd.get_dummies(dataset_a["labels"]).values
+    trainLabels = np.array(pd.get_dummies(dataset_a["labels"]).values, dtype=np.float32)
 
     testBatch   = np.row_stack(dataset["data"].values)
-    testBatch  = np.array(list(map(utils.melspectrogram, testBatch)))
+    testBatch  = np.array(list(map(utils.melspectrogram, testBatch)), dtype=np.float32)
 
-    testLabels  = pd.get_dummies(dataset["labels"]).values
+    testLabels  = np.array(pd.get_dummies(dataset["labels"]).values, dtype=np.float32)
     # import ipdb; ipdb.set_trace()
     return trainBatch, testBatch, trainLabels, testLabels
 
@@ -243,7 +243,7 @@ def shallownn(x):
     h_pool2 = tf.reshape(h_pool2, [-1, 5120])
     merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200,
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.leaky_relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
@@ -260,24 +260,30 @@ def main(_):
     with g.as_default():
         with tf.Session() as sess:
 
-            #place = tf.placeholder(tf.float32, shape=(9999, 80, 80))
+            # place = tf.placeholder(tf.float32, shape=(9999, 80, 80))
 
             print("Starting data loading")
             train, test, train_l, test_l = sample(dataset, dataset_a)
             print("Finished data loading")
             # print(train_l)
 
-            train_set = tf.Variable(tf.zeros([9999, 80, 80], dtype=tf.float32))
-            set_train = train_set.assign(place)
+            print(train.shape, train.dtype)
+            print(train_l.shape, train_l.dtype)
+            print(test.shape, test.dtype)
+            print(test_l.shape, test_l.dtype)
 
-            sess.run(set_train, feed_dict={place: train})
+            train_placeholder = tf.placeholder(train.dtype, train.shape)
+            test_placeholder = tf.placeholder(test.dtype, test.shape)
+            train_l_placeholder = tf.placeholder(train_l.dtype, train_l.shape)
+            test_l_placeholder = tf.placeholder(test_l.dtype, test_l.shape)
+
 
             learning_rate = 0.00005
 
             train_batch_size = 30
             test_batch_size  = 30
 
-            total_iteration_amount = 100000 * 20
+            total_iteration_amount = 100000
             epoch_am = ceil(total_iteration_amount / len(train))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -285,28 +291,37 @@ def main(_):
 
             train_dataset = tf.data.Dataset.from_tensor_slices(
                     (
-                        # tf.cast(train, tf.float32),
-                        train_set,
-                        tf.cast(train_l, tf.float32)
+                        # tf.convert_to_tensor(train, tf.float32),
+                        # train_set,
+                        # tf.cast(train_l, tf.float32)
+                        train_placeholder,
+                        train_l_placeholder
                     )
                     ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
+
             test_dataset = tf.data.Dataset.from_tensor_slices(
                     (
-                        tf.cast(test, tf.float32),
-                        tf.cast(test_l, tf.float32)
+                        # tf.convert_to_tensor(test, tf.float32),
+                        # tf.cast(test_l, tf.float32)
+                        test_placeholder,
+                        test_l_placeholder
                     )
                     ).batch(test_batch_size)
 
-            iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
-                                                       train_dataset.output_shapes)
+            train_it = train_dataset.make_initializable_iterator()
+            test_it = test_dataset.make_initializable_iterator()
 
-            train_init_op = iterator.make_initializer(train_dataset)
-            test_init_op  = iterator.make_initializer(test_dataset)
+            sess.run([train_it.initializer, test_it.initializer], feed_dict={train_placeholder : train,
+                                                     train_l_placeholder : train_l,
+                                                     test_placeholder : test,
+                                                     test_l_placeholder : test_l })
+
 
             with tf.variable_scope("inputs"):
                 # x = tf.placeholder(tf.float32, [None, 80, 80])
                 # y = tf.placeholder(tf.float32, [None, 10])
-                x, y = iterator.get_next()
+                print(train_it.get_next())
+                x, y = train_it.get_next()
 
                 y_hat = shallownn(x)
 
@@ -323,18 +338,19 @@ def main(_):
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
 
-            print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
-            sess.run(train_init_op)
-            for iteration in range (0, total_iteration_amount, train_batch_size):
+            # print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
+            # sess.run(train_init_op)
+            for iteration in range(0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
-                elif (iteration % (train_batch_size * 10) == 0):
+                elif (iteration % (train_batch_size * 100) == 0):
                     acc = sess.run(accuracy)
                     print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
                 else:
                     sess.run(optimiser)
 
-            sess.run(test_init_op)
+
+            x, y = train_it.get_next()
             total_acc = 0;
             for iteration in range (0, len(test), test_batch_size):
                 total_acc += sess.run(accuracy)
