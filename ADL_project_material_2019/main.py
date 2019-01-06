@@ -5,6 +5,7 @@ import pandas as pd
 import utils
 from math import ceil
 import os
+import random
 
 logdir = '{cwd}/logs/log'.format(cwd=os.getcwd())
 pickle_in = open("music_genres_dataset.pkl", "rb")
@@ -26,8 +27,13 @@ def bias_variable(shape):
 
 
 def sample(data):
-    dataset = data.sample(frac=1).reset_index(drop=True)
-    split = 10000
+
+    groups = [data for _, data in data.groupby('track_id')]
+    random.shuffle(groups)
+    dataset = pd.concat(groups).reset_index(drop=True)
+
+    # dataset = data.sample(frac=1).reset_index(drop=True)
+    split = 9750
     trainBatch  = list(np.row_stack(dataset[0:split - 1]["data"].values))
 
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
@@ -259,9 +265,9 @@ def main(_):
             learning_rate = 0.00005
 
             train_batch_size = 64
-            test_batch_size  = 64
+            test_batch_size  = 15
 
-            total_iteration_amount = 10000 * 40
+            total_iteration_amount = 10000 * 100
             epoch_am = ceil(total_iteration_amount / len(train))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -272,7 +278,7 @@ def main(_):
                         tf.cast(train, tf.float32),
                         tf.cast(train_l, tf.float32)
                     )
-                    ).batch(train_batch_size).repeat(epoch_am)
+                    ).batch(train_batch_size).shuffle(len(train)).repeat(epoch_am)
             test_dataset = tf.data.Dataset.from_tensor_slices(
                     (
                         tf.cast(test, tf.float32),
@@ -291,7 +297,7 @@ def main(_):
                 # y = tf.placeholder(tf.float32, [None, 10])
                 x, y = iterator.get_next()
 
-                y_hat = deepnn(x)
+                y_hat = shallownn(x)
 
             with tf.variable_scope("cross_entropy"):
                 cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
@@ -308,16 +314,32 @@ def main(_):
 
             optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
 
-            with tf.name_scope("accuracy"):
-                accuracy = tf.reduce_mean(
-                           tf.cast(
-                           tf.math.equal(
-                           tf.argmax(y_hat, axis=1),
-                           tf.argmax(y, axis=1)),
-                           tf.float32))
+            with tf.name_scope("acc_raw"):
+                acc_raw = tf.reduce_mean(
+                          tf.cast(
+                          tf.math.equal(
+                          tf.argmax(y_hat, axis=1),
+                          tf.argmax(y, axis=1)),
+                          tf.float32))
+
+            with tf.name_scope("acc-max"):
+                acc_max = tf.cast(
+                          tf.math.equal(
+                          tf.argmax( tf.reduce_sum(y_hat, axis=0)),
+                          tf.argmax( tf.reduce_mean(y, axis=0))),
+                          tf.float32)#, [1]),
+                          # tf.constant([15]))
+
+            with tf.name_scope("acc-maj"):
+                acc_maj = tf.cast(
+                          tf.math.equal(
+                          tf.argmax( tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
+                          tf.argmax( tf.reduce_mean(y, axis=0))),
+                          tf.float32)#, [1]),
+                          # tf.constant([15]))
 
             loss_summary = tf.summary.scalar('Loss', cross_entropy)
-            acc_summary  = tf.summary.scalar('Accuracy', accuracy)
+            acc_summary  = tf.summary.scalar('acc_raw', acc_raw)
 
             # train_data_sum = tf.summary.audio('Input_Train_Audio', train, 22050)
             # test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
@@ -337,19 +359,28 @@ def main(_):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
                 elif (iteration % (train_batch_size * 40) == 0):
-                    acc, summary = sess.run([accuracy, train_summary])
+                    acc, summary = sess.run([acc_raw, train_summary])
                     summary_writer.add_summary(summary, iteration)
                     summary_writer.flush()
-                    print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
+                    print('acc_raw at iteration %6d is %.2f' % (iteration, acc))
                 else:
                     sess.run(optimiser)
 
             sess.run(test_init_op)
-            total_acc = 0;
+            total_raw_acc = 0;
+            total_max_acc = 0;
+            total_maj_acc = 0;
             for iteration in range (0, len(test), test_batch_size):
-                total_acc += sess.run(accuracy)
-            total_acc /= (len(test) / test_batch_size)
-            print('Test data accuracy is %.2f' % (total_acc))
+                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj])
+                total_raw_acc += tmp_raw
+                total_max_acc += tmp_max
+                total_maj_acc += tmp_maj
+            total_raw_acc /= (len(test) / test_batch_size)
+            total_max_acc /= (len(test) / test_batch_size)
+            total_maj_acc /= (len(test) / test_batch_size)
+            print('Test data acc_raw is %.2f' % (total_raw_acc))
+            print('Test data acc_max is %.2f' % (total_max_acc))
+            print('Test data acc_maj is %.2f' % (total_maj_acc))
 
 
 
