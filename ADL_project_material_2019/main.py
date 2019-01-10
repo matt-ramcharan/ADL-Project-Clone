@@ -39,13 +39,20 @@ def sample(data, data_a):
     groups = [data for _, data in data.groupby('track_id')]
     groups_a = [data for _, data in data_a.groupby('track_id')]
 
-    random.shuffle(groups)
-    random.shuffle(groups_a)
+    groups_all = [[groups[I], groups_a[I]] for I in range(len(groups))]
+
+    random.shuffle(groups_all)
+
+    groups   = [x[0] for x in groups_all][700:]
+    groups_a = [x[1] for x in groups_all][:700]
+
+    # random.shuffle(groups)
+    # random.shuffle(groups_a)
 
     dataset = pd.concat(groups).reset_index(drop=True)
-    dataset_a = pd.concat(groups).reset_index(drop=True)
+    dataset_a = pd.concat(groups_a).reset_index(drop=True)
 
-    trainBatch  = list(np.row_stack(dataset["data"].values))
+    trainBatch  = list(np.row_stack(dataset_a["data"].values))
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)), dtype=np.float32)
 
     trainLabels = np.array(pd.get_dummies(dataset_a["labels"]).values, dtype=np.float32)
@@ -289,7 +296,7 @@ def main(_):
                     train_placeholder,
                     train_l_placeholder
                 )
-            ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
+            ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
 
             test_dataset = tf.data.Dataset.from_tensor_slices(
                 (

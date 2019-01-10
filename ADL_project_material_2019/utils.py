@@ -45,7 +45,7 @@ def augment(data):
     new_songs = np.array(list(pool.map(augment_song, songs)))
     print(new_songs.shape)
     new_songs = new_songs.reshape((new_songs.shape[0] * new_songs.shape[1], 3))
-    df = pd.DataFrame(new_songs)
+    df = pd.DataFrame(new_songs, columns=['data', 'labels', 'track_id'])
     print(df)
     return df
 
