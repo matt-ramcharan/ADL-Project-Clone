@@ -2,7 +2,7 @@ import librosa
 import numpy as np
 import pandas as pd
 import pickle
-
+import multiprocessing
 
 def melspectrogram(audio):
     spec = librosa.stft(audio, n_fft=512, window='hann', hop_length=256, win_length=512, pad_mode='constant')
@@ -24,19 +24,26 @@ def time_stretch(audio, rate):
 def pitch_shift(audio, shift_steps):
     return librosa.effects.pitch_shift(audio, 22050, n_steps=shift_steps, bins_per_octave=12)
 
+def augment_segment(x):
+    stretches = list(map(lambda y:[time_stretch(x[0], y)] + [x[1], x[2]], [0.5, 0.2, 1.2, 1.5]))
+    shifts = list(map(lambda y:list(map(lambda z:[pitch_shift(x[0], y)] + [x[1], x[2]], stretches)), [-5, -2, 2, 5]))
+    shifts = list(np.array(shifts).reshape((16, 3)))
+    return shifts
+
+def augment_song(x):
+    print(x[1])
+    x = list(x)
+    indices = np.random.randint(15, size=3)
+    for index in indices:
+        x = x + augment_segment(x[index])
+    return x
 
 def augment(data):
-    return pd.DataFrame(np.concatenate([[[time_stretch(row.get("data"), 0.5), row.get("labels"), row.get("track_id")],
-                                         [time_stretch(row.get("data"), 0.2), row.get("labels"), row.get("track_id")],
-                                         [time_stretch(row.get("data"), 1.2), row.get("labels"), row.get("track_id")],
-                                         [time_stretch(row.get("data"), 1.5), row.get("labels"), row.get("track_id")],
-                                         [pitch_shift(row.get("data"), -2), row.get("labels"), row.get("track_id")],
-                                         [pitch_shift(row.get("data"), -5), row.get("labels"), row.get("track_id")],
-                                         [pitch_shift(row.get("data"), 2), row.get("labels"), row.get("track_id")],
-                                         [pitch_shift(row.get("data"), 5), row.get("labels"), row.get("track_id")],
-                                         [row.get("data"), row.get("labels"), row.get("track_id")]]
-                                        for idx, row in data.iterrows()], axis=0),
-                        columns=["data", "labels", "track_id"])
+    pool = multiprocessing.Pool()
+    intial_data = np.row_stack(data.values)
+    songs = np.split(intial_data, 750)
+    new_songs = np.array(list(pool.map(augment_song, songs)))
+    print(new_songs.shape)
 
 
 def save_augmented():
@@ -46,7 +53,7 @@ def save_augmented():
     print("Stage 2 Complete")
     dataset_new = augment(dataset)
     print("Stage 3 Complete")
-    pickle.dump(dataset_new, open("music_genres_dataset_aug.pkl", "wb"))
+    pickle.dump(dataset_new, open("music_genres_dataset_aug.pkl", "wb"), protocol=2)
     print("Stage 4 Complete")
 
 
