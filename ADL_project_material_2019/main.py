@@ -221,9 +221,10 @@ def shallownn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=leaky_relu,
         name='conv1'
     )
+
+
     h_pool1 = tf.layers.max_pooling2d(
         inputs=conv1,
         pool_size=[1, 20],
@@ -240,6 +241,8 @@ def shallownn(x):
         activation=leaky_relu,
         name='conv2'
     )
+
+
     h_pool2 = tf.layers.max_pooling2d(
         inputs=conv2,
         pool_size=[20, 1],
@@ -250,14 +253,18 @@ def shallownn(x):
     h_pool2 = tf.reshape(h_pool2, [-1, 5120])
     merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=leaky_relu,
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
+    y_1_BN = tf.contrib.layers.batch_norm(y_1)
+    y_1 = leaky_relu(y_1_BN)
 
     # y_1_soft = tf.nn.softmax(y_1)
 
     y_hat = tf.layers.dense(inputs=y_1, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
+
+
 
     return y_hat
 
@@ -310,6 +317,7 @@ def main(_):
                 + str(epoch_am) + ' epochs')
 
 
+
             with tf.variable_scope("inputs"):
                 x, y = iterator.get_next()
 
@@ -328,7 +336,9 @@ def main(_):
 
             print(cross_entropy.get_shape)
 
-            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
 
             with tf.name_scope("acc_raw"):
                 acc_raw = tf.reduce_mean(
