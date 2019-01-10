@@ -36,7 +36,6 @@ def sample(data, data_a):
     # data_a = pd.DataFrame([[row.get("data"), row.get("labels"), row.get("track_id")]  for idx, row in data_a.iterrows() if idx % 9 != 0],
     #                     columns=["data", "labels", "track_id"])[0:40000]
 
-
     groups = [data for _, data in data.groupby('track_id')]
     groups_a = [data for _, data in data_a.groupby('track_id')]
 
@@ -287,9 +286,6 @@ def main(_):
 
             train_dataset = tf.data.Dataset.from_tensor_slices(
                 (
-                    # tf.convert_to_tensor(train, tf.float32),
-                    # train_set,
-                    # tf.cast(train_l, tf.float32)
                     train_placeholder,
                     train_l_placeholder
                 )
@@ -297,20 +293,17 @@ def main(_):
 
             test_dataset = tf.data.Dataset.from_tensor_slices(
                 (
-                    # tf.convert_to_tensor(test, tf.float32),
-                    # tf.cast(test_l, tf.float32)
                     test_placeholder,
                     test_l_placeholder
                 )
             ).batch(test_batch_size)
 
-            train_it = train_dataset.make_initializable_iterator()
-            test_it = test_dataset.make_initializable_iterator()
 
-            sess.run([train_it.initializer, test_it.initializer], feed_dict={train_placeholder : train,
-                                                                             train_l_placeholder : train_l,
-                                                                             test_placeholder : test,
-                                                                             test_l_placeholder : test_l })
+            iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                                       train_dataset.output_shapes)
+
+            train_init_op = iterator.make_initializer(train_dataset)
+            test_init_op  = iterator.make_initializer(test_dataset)
 
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
@@ -318,8 +311,6 @@ def main(_):
 
 
             with tf.variable_scope("inputs"):
-                # x = tf.placeholder(tf.float32, [None, 80, 80])
-                # y = tf.placeholder(tf.float32, [None, 10])
                 x, y = iterator.get_next()
 
                 y_hat = shallownn(x)
@@ -379,7 +370,9 @@ def main(_):
             sess.run(tf.local_variables_initializer())
 
             print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
-            # sess.run(train_init_op)
+            sess.run(train_init_op, feed_dict={train_placeholder : train,
+                                               train_l_placeholder : train_l})
+
             for iteration in range (0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
@@ -391,9 +384,9 @@ def main(_):
                 else:
                     sess.run(optimiser)
 
-            sess.run(test_init_op)
+            sess.run(test_init_op, feed_dict={test_placeholder : test,
+                                              test_l_placeholder : test_l})
 
-            x, y = test_it.get_next()
             total_raw_acc = 0;
             total_max_acc = 0;
             total_maj_acc = 0;
