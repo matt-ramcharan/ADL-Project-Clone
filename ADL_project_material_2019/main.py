@@ -4,6 +4,8 @@ import pickle
 import pandas as pd
 import utils
 from math import ceil
+import os
+import random
 
 pickle_in_a = open("music_genres_dataset_aug.pkl", "rb")
 dataset_a = pd.DataFrame.from_dict(pickle.load(pickle_in_a))
@@ -11,7 +13,8 @@ dataset_a = pd.DataFrame.from_dict(pickle.load(pickle_in_a))
 pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
-# dataset = dataset.sample(frac=1).reset_index(drop=True)
+logdir = '{cwd}/logs/log'.format(cwd=os.getcwd())
+
 xavier_initializer = tf.contrib.layers.xavier_initializer(uniform=True)
 
 
@@ -30,17 +33,19 @@ def bias_variable(shape):
 
 
 def sample(data, data_a):
-    # data = data[0::9]
+    # data_a = pd.DataFrame([[row.get("data"), row.get("labels"), row.get("track_id")]  for idx, row in data_a.iterrows() if idx % 9 != 0],
+    #                     columns=["data", "labels", "track_id"])[0:40000]
 
-    data_a = pd.DataFrame([[row.get("data"), row.get("labels"), row.get("track_id")]  for idx, row in data_a.iterrows() if idx % 9 != 0],
-                        columns=["data", "labels", "track_id"])[0:40000]
+    groups = [data for _, data in data.groupby('track_id')]
+    groups_a = [data for _, data in data_a.groupby('track_id')]
 
-    dataset = data.sample(frac=1).reset_index(drop=True)
-    dataset_a = data_a.sample(frac=1).reset_index(drop=True)
+    random.shuffle(groups)
+    random.shuffle(groups_a)
 
-    split = 10000
-    trainBatch  = np.row_stack(dataset_a["data"].values)
+    dataset = pd.concat(groups).reset_index(drop=True)
+    dataset_a = pd.concat(groups).reset_index(drop=True)
 
+    trainBatch  = list(np.row_stack(dataset["data"].values))
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)), dtype=np.float32)
 
     trainLabels = np.array(pd.get_dummies(dataset_a["labels"]).values, dtype=np.float32)
@@ -49,8 +54,10 @@ def sample(data, data_a):
     testBatch  = np.array(list(map(utils.melspectrogram, testBatch)), dtype=np.float32)
 
     testLabels  = np.array(pd.get_dummies(dataset["labels"]).values, dtype=np.float32)
-    # import ipdb; ipdb.set_trace()
+
     return trainBatch, testBatch, trainLabels, testLabels
+
+leaky_relu = lambda x:tf.nn.leaky_relu(x, alpha=0.3)
 
 
 def deepnn(x):
@@ -63,7 +70,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_1'
     )
     h_pool1_1 = tf.layers.max_pooling2d(
@@ -79,7 +86,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_1'
     )
     h_pool2_1 = tf.layers.max_pooling2d(
@@ -96,7 +103,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_2'
     )
     h_pool1_2 = tf.layers.max_pooling2d(
@@ -112,7 +119,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_2'
     )
     h_pool2_2 = tf.layers.max_pooling2d(
@@ -129,7 +136,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_3'
     )
     h_pool1_3 = tf.layers.max_pooling2d(
@@ -145,7 +152,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_3'
     )
     h_pool2_3 = tf.layers.max_pooling2d(
@@ -162,7 +169,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1_4'
     )
     h_pool1_4 = tf.layers.max_pooling2d(
@@ -178,7 +185,7 @@ def deepnn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2_4'
     )
     h_pool2_4 = tf.layers.max_pooling2d(
@@ -188,13 +195,13 @@ def deepnn(x):
         name='pool2_4'
     )
 
-
-
-    h_pool1 = tf.reshape(h_pool1_4, [-1, 128000])
-    h_pool2 = tf.reshape(h_pool2_4, [-1, 128000])
-    merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
-    dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200,
+    print(h_pool1_4.get_shape())
+    print(h_pool2_4.get_shape())
+    h_pool1_4 = tf.reshape(h_pool1_4, [-1, 2560])
+    h_pool2_4 = tf.reshape(h_pool2_4, [-1, 2560])
+    merge_layer = tf.concat([h_pool1_4, h_pool2_4], axis=1)
+    dropout_layer = tf.layers.dropout(merge_layer, rate=0.25, name="dropout_layer")
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
@@ -214,7 +221,7 @@ def shallownn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv1'
     )
     h_pool1 = tf.layers.max_pooling2d(
@@ -230,7 +237,7 @@ def shallownn(x):
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
-        activation=tf.nn.leaky_relu,
+        activation=leaky_relu,
         name='conv2'
     )
     h_pool2 = tf.layers.max_pooling2d(
@@ -243,13 +250,13 @@ def shallownn(x):
     h_pool2 = tf.reshape(h_pool2, [-1, 5120])
     merge_layer = tf.concat([h_pool1, h_pool2], axis=1)
     dropout_layer = tf.layers.dropout(merge_layer, rate=0.1, name="dropout_layer")
-    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=tf.nn.leaky_relu,
+    y_1 = tf.layers.dense(inputs=dropout_layer, units=200, activation=leaky_relu,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
 
-    y_1_soft = tf.nn.softmax(y_1)
+    # y_1_soft = tf.nn.softmax(y_1)
 
-    y_hat = tf.layers.dense(inputs=y_1_soft, units=10, kernel_initializer=xavier_initializer,
+    y_hat = tf.layers.dense(inputs=y_1, units=10, kernel_initializer=xavier_initializer,
                             bias_initializer=xavier_initializer, trainable=True, name="fc3")
 
     return y_hat
@@ -260,102 +267,144 @@ def main(_):
     with g.as_default():
         with tf.Session() as sess:
 
-            # place = tf.placeholder(tf.float32, shape=(9999, 80, 80))
-
             print("Starting data loading")
             train, test, train_l, test_l = sample(dataset, dataset_a)
             print("Finished data loading")
-            # print(train_l)
 
-            print(train.shape, train.dtype)
-            print(train_l.shape, train_l.dtype)
-            print(test.shape, test.dtype)
-            print(test_l.shape, test_l.dtype)
+            learning_rate = 0.00005
+
+            train_batch_size = 64
+            test_batch_size  = 15
+
+            total_iteration_amount = 10000 * 100
+            epoch_am = ceil(total_iteration_amount / len(train))
 
             train_placeholder = tf.placeholder(train.dtype, train.shape)
             test_placeholder = tf.placeholder(test.dtype, test.shape)
             train_l_placeholder = tf.placeholder(train_l.dtype, train_l.shape)
             test_l_placeholder = tf.placeholder(test_l.dtype, test_l.shape)
 
+            train_dataset = tf.data.Dataset.from_tensor_slices(
+                (
+                    train_placeholder,
+                    train_l_placeholder
+                )
+            ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
 
-            learning_rate = 0.00005
+            test_dataset = tf.data.Dataset.from_tensor_slices(
+                (
+                    test_placeholder,
+                    test_l_placeholder
+                )
+            ).batch(test_batch_size)
 
-            train_batch_size = 30
-            test_batch_size  = 30
 
-            total_iteration_amount = 100000
-            epoch_am = ceil(total_iteration_amount / len(train))
+            iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                                       train_dataset.output_shapes)
+
+            train_init_op = iterator.make_initializer(train_dataset)
+            test_init_op  = iterator.make_initializer(test_dataset)
+
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
                 + str(epoch_am) + ' epochs')
 
-            train_dataset = tf.data.Dataset.from_tensor_slices(
-                    (
-                        # tf.convert_to_tensor(train, tf.float32),
-                        # train_set,
-                        # tf.cast(train_l, tf.float32)
-                        train_placeholder,
-                        train_l_placeholder
-                    )
-                    ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
-
-            test_dataset = tf.data.Dataset.from_tensor_slices(
-                    (
-                        # tf.convert_to_tensor(test, tf.float32),
-                        # tf.cast(test_l, tf.float32)
-                        test_placeholder,
-                        test_l_placeholder
-                    )
-                    ).batch(test_batch_size)
-
-            train_it = train_dataset.make_initializable_iterator()
-            test_it = test_dataset.make_initializable_iterator()
-
-            sess.run([train_it.initializer, test_it.initializer], feed_dict={train_placeholder : train,
-                                                     train_l_placeholder : train_l,
-                                                     test_placeholder : test,
-                                                     test_l_placeholder : test_l })
-
 
             with tf.variable_scope("inputs"):
-                # x = tf.placeholder(tf.float32, [None, 80, 80])
-                # y = tf.placeholder(tf.float32, [None, 10])
-                print(train_it.get_next())
-                x, y = train_it.get_next()
+                x, y = iterator.get_next()
 
                 y_hat = shallownn(x)
 
-                cross_entropy = tf.keras.backend.categorical_crossentropy(y, y_hat, from_logits=True)
-                optimiser = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+            with tf.variable_scope("cross_entropy"):
+                cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
 
-                accuracy = tf.reduce_mean(
-                           tf.cast(
-                           tf.math.equal(
-                           tf.argmax(y_hat, axis=1),
-                           tf.argmax(y, axis=1)),
-                           tf.float32))
+            l1_regularizer = tf.contrib.layers.l1_regularizer(
+               scale=0.0001, scope=None
+            )
+            weights = tf.trainable_variables() # all vars of your graph
+            regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer, weights)
+            
+            regularized_loss = cross_entropy + regularization_penalty # this loss needs to be minimized
+
+            print(cross_entropy.get_shape)
+
+            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
+
+            with tf.name_scope("acc_raw"):
+                acc_raw = tf.reduce_mean(
+                          tf.cast(
+                          tf.math.equal(
+                          tf.argmax(y_hat, axis=1),
+                          tf.argmax(y, axis=1)),
+                          tf.float32))
+
+            with tf.name_scope("acc-max"):
+                acc_max = tf.cast(
+                          tf.math.equal(
+                          tf.argmax( tf.reduce_sum(y_hat, axis=0)),
+                          tf.argmax( tf.reduce_mean(y, axis=0))),
+                          tf.float32)#, [1]),
+                          # tf.constant([15]))
+
+            with tf.name_scope("acc-maj"):
+                acc_maj = tf.cast(
+                          tf.math.equal(
+                          tf.argmax( tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
+                          tf.argmax( tf.reduce_mean(y, axis=0))),
+                          tf.float32)#, [1]),
+                          # tf.constant([15]))
+
+            loss_summary = tf.summary.scalar('Loss', cross_entropy)
+            acc_summary  = tf.summary.scalar('acc_raw', acc_raw)
+
+            # train_data_sum = tf.summary.audio('Input_Train_Audio', train, 22050)
+            # test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
+
+            train_summary = tf.summary.merge([acc_summary, loss_summary])
+            test_summary = tf.summary.merge([acc_summary, loss_summary])
+
+            summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph, flush_secs=5)
+            summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph, flush_secs=5)
 
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
 
-            # print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
-            # sess.run(train_init_op)
-            for iteration in range(0, total_iteration_amount, train_batch_size):
+            print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
+            sess.run(train_init_op, feed_dict={train_placeholder : train,
+                                               train_l_placeholder : train_l})
+
+            for iteration in range (0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
-                elif (iteration % (train_batch_size * 100) == 0):
-                    acc = sess.run(accuracy)
-                    print('Accuracy at iteration %6d is %.2f' % (iteration, acc))
+                elif (iteration % (train_batch_size * 40) == 0):
+                    acc, summary = sess.run([acc_raw, train_summary])
+                    summary_writer.add_summary(summary, iteration)
+                    summary_writer.flush()
+                    print('acc_raw at iteration %6d is %.2f' % (iteration, acc))
                 else:
                     sess.run(optimiser)
 
+            sess.run(test_init_op, feed_dict={test_placeholder : test,
+                                              test_l_placeholder : test_l})
 
-            x, y = train_it.get_next()
-            total_acc = 0;
+            total_raw_acc = 0;
+            total_max_acc = 0;
+            total_maj_acc = 0;
             for iteration in range (0, len(test), test_batch_size):
-                total_acc += sess.run(accuracy)
-            total_acc /= (len(test) / test_batch_size)
-            print('Test data accuracy is %.2f' % (total_acc))
+                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj])
+                total_raw_acc += tmp_raw
+                total_max_acc += tmp_max
+                total_maj_acc += tmp_maj
+            total_raw_acc /= (len(test) / test_batch_size)
+            total_max_acc /= (len(test) / test_batch_size)
+            total_maj_acc /= (len(test) / test_batch_size)
+            print('Test data acc_raw is %.2f' % (total_raw_acc))
+            print('Test data acc_max is %.2f' % (total_max_acc))
+            print('Test data acc_maj is %.2f' % (total_maj_acc))
+
+
+
 
 if __name__ == '__main__':
     tf.app.run(main=main)
+
