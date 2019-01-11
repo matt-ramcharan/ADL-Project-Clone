@@ -78,6 +78,9 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_1'
     )
+
+    conv1_1 = leaky_relu(tf.contrib.layers.batch_norm(conv1_1))
+
     h_pool1_1 = tf.layers.max_pooling2d(
         inputs=conv1_1,
         pool_size=[2, 2],
@@ -94,6 +97,9 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_1'
     )
+
+    conv2_1 = leaky_relu(tf.contrib.layers.batch_norm(conv2_1))
+
     h_pool2_1 = tf.layers.max_pooling2d(
         inputs=conv2_1,
         pool_size=[2, 2],
@@ -110,6 +116,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_2'
     )
+    conv1_2 = leaky_relu(tf.contrib.layers.batch_norm(conv1_2))
     h_pool1_2 = tf.layers.max_pooling2d(
         inputs=conv1_2,
         pool_size=[2, 2],
@@ -126,6 +133,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_2'
     )
+    conv2_2 = leaky_relu(tf.contrib.layers.batch_norm(conv2_2))
     h_pool2_2 = tf.layers.max_pooling2d(
         inputs=conv2_2,
         pool_size=[2, 2],
@@ -142,6 +150,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_3'
     )
+    conv1_3 = leaky_relu(tf.contrib.layers.batch_norm(conv1_3))
     h_pool1_3 = tf.layers.max_pooling2d(
         inputs=conv1_3,
         pool_size=[2, 2],
@@ -158,6 +167,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_3'
     )
+    conv2_3 = leaky_relu(tf.contrib.layers.batch_norm(conv2_3))
     h_pool2_3 = tf.layers.max_pooling2d(
         inputs=conv2_3,
         pool_size=[2, 2],
@@ -174,6 +184,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_4'
     )
+    conv1_4 = leaky_relu(tf.contrib.layers.batch_norm(conv1_4))
     h_pool1_4 = tf.layers.max_pooling2d(
         inputs=conv1_4,
         pool_size=[1, 5],
@@ -190,6 +201,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_4'
     )
+    conv2_4 = leaky_relu(tf.contrib.layers.batch_norm(conv2_4))
     h_pool2_4 = tf.layers.max_pooling2d(
         inputs=conv2_4,
         pool_size=[5, 1],
@@ -223,6 +235,10 @@ def shallownn(x):
         activation=leaky_relu,
         name='conv1'
     )
+
+    conv1 = leaky_relu(tf.contrib.layers.batch_norm(conv1))
+
+
     h_pool1 = tf.layers.max_pooling2d(
         inputs=conv1,
         pool_size=[1, 20],
@@ -239,6 +255,9 @@ def shallownn(x):
         activation=leaky_relu,
         name='conv2'
     )
+
+    conv2 = leaky_relu(tf.contrib.layers.batch_norm(conv2))
+
     h_pool2 = tf.layers.max_pooling2d(
         inputs=conv2,
         pool_size=[20, 1],
@@ -284,8 +303,8 @@ def main(_):
             train_batch_size = 64
             test_batch_size  = 15
 
-            total_iteration_amount = 10000 * 200
-            epoch_am = int(ceil(total_iteration_amount / len(train)))
+            total_iteration_amount = 10000 * 100
+            epoch_am = int(ceil(total_iteration_amount / len(train)) + 1)
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
                 + str(epoch_am) + ' epochs')
@@ -308,7 +327,6 @@ def main(_):
                                 test_l_placeholder
                         )
                         ).batch(test_batch_size)
-
                 iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
                                                            train_dataset.output_shapes)
             except AttributeError:
@@ -349,7 +367,6 @@ def main(_):
             
             regularized_loss = cross_entropy + regularization_penalty # this loss needs to be minimized
 
-            print(cross_entropy.get_shape)
 
             optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
 
@@ -418,7 +435,7 @@ def main(_):
             print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
             sess.run(train_init_op, feed_dict={train_placeholder:train, train_l_placeholder:train_l})
             for iteration in range (0, total_iteration_amount, train_batch_size):
-                if (iteration % (len(train)+1) == 0):
+                if (iteration % (len(train)) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
                 elif (iteration % (train_batch_size * 40) == 0):
                     acc, summary = sess.run([acc_raw, train_summary])
