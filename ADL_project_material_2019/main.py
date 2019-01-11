@@ -73,6 +73,9 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_1'
     )
+
+    conv1_1 = leaky_relu(tf.contrib.layers.batch_norm(conv1_1))
+
     h_pool1_1 = tf.layers.max_pooling2d(
         inputs=conv1_1,
         pool_size=[2, 2],
@@ -89,6 +92,9 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_1'
     )
+
+    conv2_1 = leaky_relu(tf.contrib.layers.batch_norm(conv2_1))
+
     h_pool2_1 = tf.layers.max_pooling2d(
         inputs=conv2_1,
         pool_size=[2, 2],
@@ -106,6 +112,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_2'
     )
+    conv1_2 = leaky_relu(tf.contrib.layers.batch_norm(conv1_2))
     h_pool1_2 = tf.layers.max_pooling2d(
         inputs=conv1_2,
         pool_size=[2, 2],
@@ -122,6 +129,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_2'
     )
+    conv2_2 = leaky_relu(tf.contrib.layers.batch_norm(conv2_2))
     h_pool2_2 = tf.layers.max_pooling2d(
         inputs=conv2_2,
         pool_size=[2, 2],
@@ -139,6 +147,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_3'
     )
+    conv1_3 = leaky_relu(tf.contrib.layers.batch_norm(conv1_3))
     h_pool1_3 = tf.layers.max_pooling2d(
         inputs=conv1_3,
         pool_size=[2, 2],
@@ -155,6 +164,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_3'
     )
+    conv2_3 = leaky_relu(tf.contrib.layers.batch_norm(conv2_3))
     h_pool2_3 = tf.layers.max_pooling2d(
         inputs=conv2_3,
         pool_size=[2, 2],
@@ -172,6 +182,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv1_4'
     )
+    conv1_4 = leaky_relu(tf.contrib.layers.batch_norm(conv1_4))
     h_pool1_4 = tf.layers.max_pooling2d(
         inputs=conv1_4,
         pool_size=[1, 5],
@@ -188,6 +199,7 @@ def deepnn(x):
         activation=leaky_relu,
         name='conv2_4'
     )
+    conv2_4 = leaky_relu(tf.contrib.layers.batch_norm(conv2_4))
     h_pool2_4 = tf.layers.max_pooling2d(
         inputs=conv2_4,
         pool_size=[5, 1],
@@ -224,6 +236,8 @@ def shallownn(x):
         name='conv1'
     )
 
+    conv1 = leaky_relu(tf.contrib.layers.batch_norm(conv1))
+
 
     h_pool1 = tf.layers.max_pooling2d(
         inputs=conv1,
@@ -242,6 +256,7 @@ def shallownn(x):
         name='conv2'
     )
 
+    conv2 = leaky_relu(tf.contrib.layers.batch_norm(conv2))
 
     h_pool2 = tf.layers.max_pooling2d(
         inputs=conv2,
@@ -256,8 +271,6 @@ def shallownn(x):
     y_1 = tf.layers.dense(inputs=dropout_layer, units=200,
                           kernel_initializer=xavier_initializer, bias_initializer=xavier_initializer, trainable=True,
                           name="fc1")
-    y_1_BN = tf.contrib.layers.batch_norm(y_1)
-    y_1 = leaky_relu(y_1_BN)
 
     # y_1_soft = tf.nn.softmax(y_1)
 
@@ -283,7 +296,7 @@ def main(_):
             train_batch_size = 64
             test_batch_size  = 15
 
-            total_iteration_amount = 10000 * 100
+            total_iteration_amount = 500000
             epoch_am = ceil(total_iteration_amount / len(train))
 
             train_placeholder = tf.placeholder(train.dtype, train.shape)
@@ -334,7 +347,6 @@ def main(_):
             
             regularized_loss = cross_entropy + regularization_penalty # this loss needs to be minimized
 
-            print(cross_entropy.get_shape)
 
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
@@ -384,7 +396,7 @@ def main(_):
                                                train_l_placeholder : train_l})
 
             for iteration in range (0, total_iteration_amount, train_batch_size):
-                if (iteration % (len(train)+1) == 0):
+                if (iteration % (len(train)) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
                 elif (iteration % (train_batch_size * 40) == 0):
                     acc, summary = sess.run([acc_raw, train_summary])
