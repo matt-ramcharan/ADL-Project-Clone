@@ -296,7 +296,7 @@ def main(_):
             train_batch_size = 64
             test_batch_size  = 15
 
-            total_iteration_amount = 500000
+            total_iteration_amount = 1150000
             epoch_am = ceil(total_iteration_amount / len(train))
 
             train_placeholder = tf.placeholder(train.dtype, train.shape)
@@ -396,7 +396,7 @@ def main(_):
                                                train_l_placeholder : train_l})
 
             for iteration in range (0, total_iteration_amount, train_batch_size):
-                if (iteration % (len(train)) == 0):
+                if (iteration % (len(train) + 46 ) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
                 elif (iteration % (train_batch_size * 40) == 0):
                     acc, summary = sess.run([acc_raw, train_summary])
