@@ -309,30 +309,32 @@ def main(_):
                     train_placeholder,
                     train_l_placeholder
                 )
-            ).batch(train_batch_size).repeat(epoch_am).shuffle(len(train), seed=0)
+            ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
 
             test_dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     test_placeholder,
                     test_l_placeholder
                 )
-            ).batch(test_batch_size)
+            ).batch(test_batch_size).repeat(epoch_am)
 
 
             iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
                                                        train_dataset.output_shapes)
 
+            iterator_test = tf.data.Iterator.from_structure(test_dataset.output_types,
+                                                       train_dataset.output_shapes)
+
             train_init_op = iterator.make_initializer(train_dataset)
-            test_init_op  = iterator.make_initializer(test_dataset)
+            test_init_op = iterator_test.make_initializer(test_dataset)
 
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
                 + str(epoch_am) + ' epochs')
 
-
-
             with tf.variable_scope("inputs"):
-                x, y = iterator.get_next()
+                is_training = tf.placeholder(tf.bool, shape=())
+                x, y = tf.cond(is_training, lambda: iterator.get_next(), lambda: iterator_test.get_next())
 
                 y_hat = shallownn(x)
 
@@ -383,7 +385,6 @@ def main(_):
             # test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
 
             train_summary = tf.summary.merge([acc_summary, loss_summary])
-            test_summary = tf.summary.merge([acc_summary, loss_summary])
 
             summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph, flush_secs=5)
             summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph, flush_secs=5)
@@ -395,25 +396,33 @@ def main(_):
             sess.run(train_init_op, feed_dict={train_placeholder : train,
                                                train_l_placeholder : train_l})
 
+            sess.run(test_init_op, feed_dict={test_placeholder: test,
+                                               test_l_placeholder: test_l})
+
             for iteration in range (0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train) + 46 ) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
                 elif (iteration % (train_batch_size * 40) == 0):
-                    acc, summary = sess.run([acc_raw, train_summary])
+                    acc, summary = sess.run([acc_raw, train_summary], feed_dict={is_training: True})
                     summary_writer.add_summary(summary, iteration)
                     summary_writer.flush()
+
+                    test_summary = sess.run(loss_summary, feed_dict={is_training: False})
+                    summary_test_writer.add_summary(test_summary, iteration)
+                    summary_test_writer.flush()
+
                     print('acc_raw at iteration %6d is %.2f' % (iteration, acc))
                 else:
-                    sess.run(optimiser)
+                    sess.run(optimiser, feed_dict={is_training: True})
 
-            sess.run(test_init_op, feed_dict={test_placeholder : test,
-                                              test_l_placeholder : test_l})
+            #sess.run(test_init_op, feed_dict={test_placeholder : test,
+            #                                   test_l_placeholder : test_l})
 
             total_raw_acc = 0;
             total_max_acc = 0;
             total_maj_acc = 0;
             for iteration in range (0, len(test), test_batch_size):
-                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj])
+                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj], feed_dict={is_training: False})
                 total_raw_acc += tmp_raw
                 total_max_acc += tmp_max
                 total_maj_acc += tmp_maj
