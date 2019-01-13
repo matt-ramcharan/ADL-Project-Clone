@@ -31,7 +31,7 @@ def augment_segment(x):
     return shifts
 
 def augment_song(x):
-    print(x[1])
+    print(x[0][2])
     x = list(x)
     indices = np.random.randint(15, size=3)
     for index in indices:
@@ -44,6 +44,10 @@ def augment(data):
     songs = np.split(intial_data, 750)
     new_songs = np.array(list(pool.map(augment_song, songs)))
     print(new_songs.shape)
+    new_songs = new_songs.reshape((new_songs.shape[0] * new_songs.shape[1], 3))
+    df = pd.DataFrame(new_songs, columns=['data', 'labels', 'track_id'])
+    print(df)
+    return df
 
 
 def save_augmented():

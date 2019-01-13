@@ -1,0 +1,41 @@
+Unsupervised feature learning for audio classification using convolutional deep neural newts
+
+Talks first paper to use CNN's to classify audio. They use unlabeled data to try and draw out different sounds within utterances 
+and to try to distinguish between the gender of the speakers, although done on on unlablled data this is challenging. 
+
+CDBN convolutional deep belief network are an enhancement on the convolutional restricted boltzmann network
+
+Very short section on music classification. Similar approach to ours with PCA whitening but also they attempt to 
+detect the artist in the track
+
+
+
+
+
+
+
+maybe we should PCA whiten to enhance our CNN?
+
+
+Deep content-based music recommendation
+
+Focusses on reccomender systems and the drawbacks of current approaches. Collaborative filtering is cold start - needs other peoples opinions first. Content based tries to use the artist / year of release metadata but thats not great because listener normall knows these. 
+
+They compare a number of different approaches from lenar regression or MLP -> Bag of words , CNN -> MelSpetro
+
+Conclusion - you can reasonably use the latent data in a new song to predict its popularity with a user
+
+
+
+
+Self-taught Learning: Transfer Learning from Unlabeled Data
+
+Focus on applying labels to data using transfer learning, obvis. When applied to different types of data (images vs audio) it learns features to detect (edges for images, frequencies in audio) without being given labels or anything other than a bunch of data. Hence, self Taught. Classifies music at 45% at best so room for improvement but impressive nonetheless.
+
+
+
+
+Musical Genre Classification of Audio Signals
+
+Looking to classify genres which is good. Extract a whole bunch of features, mel frequencies included. 
+With their features extracted they use Gaussian Mixture Models to test for patterns (statistical pattern recognition techniques) as well as a k-means classifier to achieve results averaging around 70% accuracy
