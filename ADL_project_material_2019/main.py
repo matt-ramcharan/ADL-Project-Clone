@@ -284,6 +284,9 @@ def shallownn(x):
 def main(_):
     tf.reset_default_graph()
     g = tf.get_default_graph()
+
+
+
     with g.as_default():
         with tf.Session() as sess:
 
@@ -296,7 +299,7 @@ def main(_):
             train_batch_size = 64
             test_batch_size  = 15
 
-            total_iteration_amount = 1150000
+            total_iteration_amount = 115000000
             epoch_am = ceil(total_iteration_amount / len(train))
 
             train_placeholder = tf.placeholder(train.dtype, train.shape)
@@ -389,6 +392,9 @@ def main(_):
             summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph, flush_secs=5)
             summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph, flush_secs=5)
 
+            # saver for checkpoints
+            saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
+
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
 
@@ -402,6 +408,11 @@ def main(_):
             for iteration in range (0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train) + 46 ) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
+
+                    ## Save the model checkpoint periodically.
+                    checkpoint_path = os.path.join(logdir + '_train', 'model.ckpt')
+                    saver.save(sess, checkpoint_path, global_step=iteration)
+
                 elif (iteration % (train_batch_size * 40) == 0):
                     acc, summary = sess.run([acc_raw, train_summary], feed_dict={is_training: True})
                     summary_writer.add_summary(summary, iteration)
