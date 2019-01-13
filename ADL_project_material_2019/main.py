@@ -33,9 +33,6 @@ def bias_variable(shape):
 
 
 def sample(data, data_a):
-    # data_a = pd.DataFrame([[row.get("data"), row.get("labels"), row.get("track_id")]  for idx, row in data_a.iterrows() if idx % 9 != 0],
-    #                     columns=["data", "labels", "track_id"])[0:40000]
-
     groups = [data for _, data in data.groupby('track_id')]
     groups_a = [data for _, data in data_a.groupby('track_id')]
 
@@ -102,7 +99,7 @@ def deepnn(x):
     conv2_1 = tf.layers.conv2d(
         inputs=x,
         filters=16,
-    kernel_size=[21, 10],
+        kernel_size=[21, 10],
         padding='same',
         use_bias=False,
         kernel_initializer=xavier_initializer,
