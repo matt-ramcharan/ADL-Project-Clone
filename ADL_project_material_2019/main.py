@@ -435,16 +435,21 @@ def main(_):
             sess.run(train_init_op, feed_dict={train_placeholder : train,
                                                train_l_placeholder : train_l})
 
-            for iteration in range (0, total_iteration_amount, train_batch_size):
-                if (iteration % (len(train)+1) == 0):
-                    print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
-                elif (iteration % (train_batch_size * 40) == 0):
-                    acc, summary = sess.run([acc_raw, train_summary])
-                    summary_writer.add_summary(summary, iteration)
-                    summary_writer.flush()
-                    print('acc_raw at iteration %6d is %.2f' % (iteration, acc))
-                else:
-                    sess.run(optimiser)
+	    iteration = 0
+	    try: 
+                while(True):
+                    if (iteration % (len(train)+1) == 0):
+                        print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
+                    elif (iteration % (train_batch_size * 40) == 0):
+                        acc, summary = sess.run([acc_raw, train_summary])
+                        summary_writer.add_summary(summary, iteration)
+                        summary_writer.flush()
+                        print('acc_raw at iteration %6d is %.2f' % (iteration, acc))
+                    else:
+                        sess.run(optimiser)
+                    iteration += train_batch_size
+	    except tf.errors.OutOfRangeError:
+                pass
 
             sess.run(test_init_op, feed_dict={test_placeholder : test,
                                               test_l_placeholder : test_l})
