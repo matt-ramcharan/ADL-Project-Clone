@@ -1,8 +1,10 @@
 import librosa
+import librosa.display
 import numpy as np
 import pandas as pd
 import pickle
 import multiprocessing
+import matplotlib.pyplot as plt
 
 def melspectrogram(audio):
     spec = librosa.stft(audio, n_fft=512, window='hann', hop_length=256, win_length=512, pad_mode='constant')
@@ -49,6 +51,65 @@ def augment(data):
     print(df)
     return df
 
+def mkdir_p(mypath):
+    '''Creates a directory. equivalent to using mkdir -p on the command line'''
+
+    from errno import EEXIST
+    from os import makedirs,path
+
+    try:
+        makedirs(mypath)
+    except OSError as exc: # Python >2.5
+        if exc.errno == EEXIST and path.isdir(mypath):
+            pass
+        else: raise
+
+def spectrogram_plot(groups,classes):
+    track_label = groups['labels'].iloc[0]
+    track_class = classes[track_label]
+    track_id = groups['track_id'].iloc[0]
+    i=0
+
+    for tseries in groups['data']:
+        plt.figure(figsize=(12, 8))
+        plt.title("track_id")
+        plt.subplot(2, 1, 1)
+        librosa.display.waveplot(tseries, sr=22050)
+        plt.title('amplitude envelope of audio waveform')
+
+        mel = melspectrogram(tseries)
+        plt.subplot(2, 1, 2)
+        librosa.display.specshow(librosa.amplitude_to_db(mel ** 2, np.max), y_axis='log', x_axis='time')
+        plt.colorbar(format='%+2.0f dB')
+        plt.title('Log-frequency power spectrogram')
+        dir = 'spectrograms/' + track_class + '/ID_' + str(track_id) + '_' + '/'
+        mkdir_p(dir)
+        plt.savefig(dir + str(i) +'.pdf', format='pdf')
+        i+=1
+
+def save_specto_plots():
+    classes = { 0:"blues",
+                1:"classical",
+                2:"country",
+                3:"disco",
+                4:"hiphop",
+                5:"jazz",
+                6:"metal",
+                7:"pop",
+                8:"reggae",
+                9:"rock",
+                }
+    pickle_in = open("music_genres_dataset.pkl", "rb")
+    print("Stage 1 Complete")
+    dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
+    print("Stage 2 Complete")
+
+    groups = [data for _, data in dataset.groupby('track_id')]
+
+    for i in groups:
+        spectrogram_plot(i,classes)
+
+    print("Stage 3 Complete")
 
 def save_augmented():
     pickle_in = open("music_genres_dataset.pkl", "rb")
