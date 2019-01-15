@@ -44,7 +44,7 @@ def sample(data, data_a):
     groups_a = [x[1] for x in groups_all][:700]
     ## checks
 
-    while len(set(np.row_stack( np.array([row["labels"].values for row in groups])).flatten())) != 10 and len(set(np.row_stack( np.array([row["labels"].values for row in groups_a])).flatten())) != 10:
+    while len(set(np.row_stack( np.array([row["labels"].values for row in groups])).flatten())) != 10 or len(set(np.row_stack( np.array([row["labels"].values for row in groups_a])).flatten())) != 10:
         print("Must reshuffle")
         random.shuffle(groups_all)
         groups   = [x[0] for x in groups_all][700:]
@@ -295,12 +295,10 @@ def shallownn(x):
 
     return y_hat
 
+
 def main(_):
     tf.reset_default_graph()
     g = tf.get_default_graph()
-
-
-
     with g.as_default():
         with tf.Session() as sess:
 
@@ -311,9 +309,9 @@ def main(_):
             learning_rate = 0.00005
 
             train_batch_size = 64
-            test_batch_size  = 15
+            test_batch_size = 15
 
-            total_iteration_amount = 115000000
+            total_iteration_amount = 10000 * 300
             epoch_am = ceil(total_iteration_amount / len(train))
 
             train_placeholder = tf.placeholder(train.dtype, train.shape)
@@ -333,25 +331,19 @@ def main(_):
                     test_placeholder,
                     test_l_placeholder
                 )
-            ).batch(test_batch_size).repeat(epoch_am)
-
+            ).batch(test_batch_size)
 
             iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
                                                        train_dataset.output_shapes)
 
-            iterator_test = tf.data.Iterator.from_structure(test_dataset.output_types,
-                                                       train_dataset.output_shapes)
-
             train_init_op = iterator.make_initializer(train_dataset)
-            test_init_op = iterator_test.make_initializer(test_dataset)
-
+            test_init_op = iterator.make_initializer(test_dataset)
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
-                + str(epoch_am) + ' epochs')
+                  + str(epoch_am) + ' epochs')
 
             with tf.variable_scope("inputs"):
-                is_training = tf.placeholder(tf.bool, shape=())
-                x, y = tf.cond(is_training, lambda: iterator.get_next(), lambda: iterator_test.get_next())
+                x, y = iterator.get_next()
 
                 y_hat = shallownn(x)
 
@@ -359,95 +351,77 @@ def main(_):
                 cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
 
             l1_regularizer = tf.contrib.layers.l1_regularizer(
-               scale=0.0001, scope=None
+                scale=0.0001, scope=None
             )
-            weights = tf.trainable_variables() # all vars of your graph
+            weights = tf.trainable_variables()  # all vars of your graph
             regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer, weights)
-            
-            regularized_loss = cross_entropy + regularization_penalty # this loss needs to be minimized
 
+            regularized_loss = cross_entropy + regularization_penalty  # this loss needs to be minimized
 
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            with tf.control_dependencies(update_ops):
-                optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
+            optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
 
             with tf.name_scope("acc_raw"):
                 acc_raw = tf.reduce_mean(
-                          tf.cast(
-                          tf.math.equal(
-                          tf.argmax(y_hat, axis=1),
-                          tf.argmax(y, axis=1)),
-                          tf.float32))
+                    tf.cast(
+                        tf.math.equal(
+                            tf.argmax(y_hat, axis=1),
+                            tf.argmax(y, axis=1)),
+                        tf.float32))
 
             with tf.name_scope("acc-max"):
                 acc_max = tf.cast(
-                          tf.math.equal(
-                          tf.argmax( tf.reduce_sum(y_hat, axis=0)),
-                          tf.argmax( tf.reduce_mean(y, axis=0))),
-                          tf.float32)#, [1]),
-                          # tf.constant([15]))
+                    tf.math.equal(
+                        tf.argmax(tf.reduce_sum(y_hat, axis=0)),
+                        tf.argmax(tf.reduce_mean(y, axis=0))),
+                    tf.float32)  # , [1]),
+                # tf.constant([15]))
 
             with tf.name_scope("acc-maj"):
                 acc_maj = tf.cast(
-                          tf.math.equal(
-                          tf.argmax( tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
-                          tf.argmax( tf.reduce_mean(y, axis=0))),
-                          tf.float32)#, [1]),
-                          # tf.constant([15]))
+                    tf.math.equal(
+                        tf.argmax(tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
+                        tf.argmax(tf.reduce_mean(y, axis=0))),
+                    tf.float32)  # , [1]),
+                # tf.constant([15]))
 
             loss_summary = tf.summary.scalar('Loss', cross_entropy)
-            acc_summary  = tf.summary.scalar('acc_raw', acc_raw)
+            acc_summary = tf.summary.scalar('acc_raw', acc_raw)
 
             # train_data_sum = tf.summary.audio('Input_Train_Audio', train, 22050)
             # test_data_sum = tf.summary.audio('Input_Test_Audio', test, 22050)
 
             train_summary = tf.summary.merge([acc_summary, loss_summary])
+            test_summary = tf.summary.merge([acc_summary, loss_summary])
 
-            summary_writer = tf.summary.FileWriter(logdir+'_train', sess.graph, flush_secs=5)
-            summary_test_writer = tf.summary.FileWriter(logdir+'_test', sess.graph, flush_secs=5)
-
-            # saver for checkpoints
-            saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
+            summary_writer = tf.summary.FileWriter(logdir + '_train', sess.graph, flush_secs=5)
+            summary_test_writer = tf.summary.FileWriter(logdir + '_test', sess.graph, flush_secs=5)
 
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
 
             print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
-            sess.run(train_init_op, feed_dict={train_placeholder : train,
-                                               train_l_placeholder : train_l})
+            sess.run(train_init_op, feed_dict={train_placeholder: train,
+                                               train_l_placeholder: train_l})
 
-            sess.run(test_init_op, feed_dict={test_placeholder: test,
-                                               test_l_placeholder: test_l})
-
-            for iteration in range (0, total_iteration_amount, train_batch_size):
-                if (iteration % (len(train) + 46 ) == 0):
-                    print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
-
-                    ## Save the model checkpoint periodically.
-                    checkpoint_path = os.path.join(logdir + '_train', 'model.ckpt')
-                    saver.save(sess, checkpoint_path, global_step=iteration)
-
+            for iteration in range(0, total_iteration_amount, train_batch_size):
+                if (iteration % (len(train) + 1) == 0):
+                    print("-" * 20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-" * 20)
                 elif (iteration % (train_batch_size * 40) == 0):
-                    acc, summary = sess.run([acc_raw, train_summary], feed_dict={is_training: True})
+                    acc, summary = sess.run([acc_raw, train_summary])
                     summary_writer.add_summary(summary, iteration)
                     summary_writer.flush()
-
-                    test_summary = sess.run(loss_summary, feed_dict={is_training: False})
-                    summary_test_writer.add_summary(test_summary, iteration)
-                    summary_test_writer.flush()
-
                     print('acc_raw at iteration %6d is %.2f' % (iteration, acc))
                 else:
-                    sess.run(optimiser, feed_dict={is_training: True})
+                    sess.run(optimiser)
 
-            #sess.run(test_init_op, feed_dict={test_placeholder : test,
-            #                                   test_l_placeholder : test_l})
+            sess.run(test_init_op, feed_dict={test_placeholder: test,
+                                              test_l_placeholder: test_l})
 
             total_raw_acc = 0;
             total_max_acc = 0;
             total_maj_acc = 0;
-            for iteration in range (0, len(test), test_batch_size):
-                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj], feed_dict={is_training: False})
+            for iteration in range(0, len(test), test_batch_size):
+                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj])
                 total_raw_acc += tmp_raw
                 total_max_acc += tmp_max
                 total_maj_acc += tmp_maj
@@ -457,8 +431,6 @@ def main(_):
             print('Test data acc_raw is %.2f' % (total_raw_acc))
             print('Test data acc_max is %.2f' % (total_max_acc))
             print('Test data acc_maj is %.2f' % (total_maj_acc))
-
-
 
 
 if __name__ == '__main__':
