@@ -74,7 +74,11 @@ def sample(data, data_a):
 
     return trainBatch, testBatch, trainLabels, testLabels
 
-leaky_relu = lambda x:tf.nn.leaky_relu(x, alpha=0.3)
+def leaky_relu(x):
+	try:
+		return tf.nn.leaky_relu(x, alpha=0.3)
+	except AttributeError:
+		return tf.nn.relu(x)
 
 
 def deepnn(x):
@@ -294,29 +298,47 @@ def main(_):
             test_batch_size  = 15
 
             total_iteration_amount = 10000 * 100
-            epoch_am = ceil(total_iteration_amount / len(train))
+            epoch_am = int(ceil(total_iteration_amount / len(train)))
 
             train_placeholder = tf.placeholder(train.dtype, train.shape)
             test_placeholder = tf.placeholder(test.dtype, test.shape)
             train_l_placeholder = tf.placeholder(train_l.dtype, train_l.shape)
             test_l_placeholder = tf.placeholder(test_l.dtype, test_l.shape)
 
-            train_dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    train_placeholder,
-                    train_l_placeholder
-                )
-            ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
+	    try:
+                train_dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        train_placeholder,
+                        train_l_placeholder
+                    )
+                ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
 
-            test_dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    test_placeholder,
-                    test_l_placeholder
-                )
-            ).batch(test_batch_size)
+                test_dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        test_placeholder,
+                        test_l_placeholder
+                    )
+                ).batch(test_batch_size)
+            except AttributeError:
+                train_dataset = tf.contrib.data.Dataset.from_tensor_slices(
+                    (
+                        train_placeholder,
+                        train_l_placeholder
+                    )
+                ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
 
+                test_dataset = tf.contrib.data.Dataset.from_tensor_slices(
+                    (
+                        test_placeholder,
+                        test_l_placeholder
+                    )
+                ).batch(test_batch_size)
 
-            iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+            try:
+                iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                                       train_dataset.output_shapes)
+            except AttributeError:
+                iterator = tf.contrib.data.Iterator.from_structure(train_dataset.output_types,
                                                        train_dataset.output_shapes)
 
             train_init_op = iterator.make_initializer(train_dataset)
@@ -347,29 +369,52 @@ def main(_):
 
             optimiser = tf.train.AdamOptimizer(learning_rate).minimize(regularized_loss)
 
-            with tf.name_scope("acc_raw"):
-                acc_raw = tf.reduce_mean(
-                          tf.cast(
-                          tf.math.equal(
-                          tf.argmax(y_hat, axis=1),
-                          tf.argmax(y, axis=1)),
-                          tf.float32))
+            try:
+                with tf.name_scope("acc_raw"):
+                    acc_raw = tf.reduce_mean(
+                              tf.cast(
+                              tf.math.equal(
+                              tf.argmax(y_hat, axis=1),
+                              tf.argmax(y, axis=1)),
+                              tf.float32))
 
-            with tf.name_scope("acc-max"):
-                acc_max = tf.cast(
-                          tf.math.equal(
-                          tf.argmax( tf.reduce_sum(y_hat, axis=0)),
-                          tf.argmax( tf.reduce_mean(y, axis=0))),
-                          tf.float32)#, [1]),
-                          # tf.constant([15]))
+                with tf.name_scope("acc-max"):
+                    acc_max = tf.cast(
+                              tf.math.equal(
+                              tf.argmax( tf.reduce_sum(y_hat, axis=0)),
+                              tf.argmax( tf.reduce_mean(y, axis=0))),
+                              tf.float32)#, [1]),
+                              # tf.constant([15]))
+                with tf.name_scope("acc-maj"):
+                    acc_maj = tf.cast(
+                              tf.math.equal(
+                              tf.argmax( tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
+                              tf.argmax( tf.reduce_mean(y, axis=0))),
+                              tf.float32)#, [1]),
+                              # tf.constant([15]))
+	    except AttributeError:
+                with tf.name_scope("acc_raw"):
+                    acc_raw = tf.reduce_mean(
+                              tf.cast(
+                              tf.equal(
+                              tf.argmax(y_hat, axis=1),
+                              tf.argmax(y, axis=1)),
+                              tf.float32))
 
-            with tf.name_scope("acc-maj"):
-                acc_maj = tf.cast(
-                          tf.math.equal(
-                          tf.argmax( tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
-                          tf.argmax( tf.reduce_mean(y, axis=0))),
-                          tf.float32)#, [1]),
-                          # tf.constant([15]))
+                with tf.name_scope("acc-max"):
+                    acc_max = tf.cast(
+                              tf.equal(
+                              tf.argmax( tf.reduce_sum(y_hat, axis=0)),
+                              tf.argmax( tf.reduce_mean(y, axis=0))),
+                              tf.float32)#, [1]),
+                              # tf.constant([15]))
+                with tf.name_scope("acc-maj"):
+                    acc_maj = tf.cast(
+                              tf.equal(
+                              tf.argmax( tf.reduce_sum(tf.one_hot(tf.argmax(y_hat, axis=1), 10), axis=0)),
+                              tf.argmax( tf.reduce_mean(y, axis=0))),
+                              tf.float32)#, [1]),
+                              # tf.constant([15]))
 
             loss_summary = tf.summary.scalar('Loss', cross_entropy)
             acc_summary  = tf.summary.scalar('acc_raw', acc_raw)
