@@ -65,14 +65,16 @@ def sample(data, data_a):
 
     print("SO")
     trainLabels = np.array(pd.get_dummies(dataset_a["labels"]).values, dtype=np.float32)
+    trainIDs = np.array(dataset_a["track_id"].values, dtype=np.float32)
 
     testBatch   = np.row_stack(dataset["data"].values)
     testBatch  = np.array(list(map(utils.melspectrogram, testBatch)), dtype=np.float32)
 
     print("BORED")
     testLabels  = np.array(pd.get_dummies(dataset["labels"]).values, dtype=np.float32)
+    testIDs = np.array(dataset["track_id"].values, dtype=np.float32)
 
-    return trainBatch, testBatch, trainLabels, testLabels
+    return trainBatch, testBatch, trainLabels, testLabels, trainIDs, testIDs
 
 def leaky_relu(x):
 	try:
@@ -289,7 +291,7 @@ def main(_):
         with tf.Session() as sess:
 
             print("Starting data loading")
-            train, test, train_l, test_l = sample(dataset, dataset_a)
+            train, test, train_l, test_l, train_id, test_id = sample(dataset, dataset_a)
             print("Finished data loading")
 
             learning_rate = 0.00005
@@ -304,33 +306,39 @@ def main(_):
             test_placeholder = tf.placeholder(test.dtype, test.shape)
             train_l_placeholder = tf.placeholder(train_l.dtype, train_l.shape)
             test_l_placeholder = tf.placeholder(test_l.dtype, test_l.shape)
+            train_id_placeholder = tf.placeholder(train_id.dtype, train_id.shape)
+            test_id_placeholder = tf.placeholder(test_id.dtype, test_id.shape)
 
 	    try:
                 train_dataset = tf.data.Dataset.from_tensor_slices(
                     (
                         train_placeholder,
-                        train_l_placeholder
+                        train_l_placeholder,
+			train_id_placeholder
                     )
                 ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
 
                 test_dataset = tf.data.Dataset.from_tensor_slices(
                     (
                         test_placeholder,
-                        test_l_placeholder
+                        test_l_placeholder,
+			test_id_placeholder
                     )
                 ).batch(test_batch_size)
             except AttributeError:
                 train_dataset = tf.contrib.data.Dataset.from_tensor_slices(
                     (
                         train_placeholder,
-                        train_l_placeholder
+                        train_l_placeholder,
+			train_id_placeholder
                     )
                 ).batch(train_batch_size).shuffle(len(train), seed=0).repeat(epoch_am)
 
                 test_dataset = tf.contrib.data.Dataset.from_tensor_slices(
                     (
                         test_placeholder,
-                        test_l_placeholder
+                        test_l_placeholder,
+			test_id_placeholder
                     )
                 ).batch(test_batch_size)
 
@@ -350,7 +358,7 @@ def main(_):
 
 
             with tf.variable_scope("inputs"):
-                x, y = iterator.get_next()
+                x, y, z = iterator.get_next()
 
                 y_hat = shallownn(x)
 
@@ -433,7 +441,8 @@ def main(_):
 
             print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
             sess.run(train_init_op, feed_dict={train_placeholder : train,
-                                               train_l_placeholder : train_l})
+                                               train_l_placeholder : train_l,
+                                               train_id_placeholder : train_id})
 
 	    iteration = 0
 	    try: 
@@ -452,13 +461,17 @@ def main(_):
                 pass
 
             sess.run(test_init_op, feed_dict={test_placeholder : test,
-                                              test_l_placeholder : test_l})
+                                              test_l_placeholder : test_l,
+                                              test_id_placeholder : test_id})
+
+            predictions = []
 
             total_raw_acc = 0;
             total_max_acc = 0;
             total_maj_acc = 0;
             for iteration in range (0, len(test), test_batch_size):
-                tmp_raw, tmp_max, tmp_maj = sess.run([acc_raw, acc_max, acc_maj])
+                tmp_raw, tmp_max, tmp_maj, preds, track_id = sess.run([acc_raw, acc_max, acc_maj, y_hat, z])
+                predictions.append([track_id, preds])
                 total_raw_acc += tmp_raw
                 total_max_acc += tmp_max
                 total_maj_acc += tmp_maj
@@ -468,7 +481,7 @@ def main(_):
             print('Test data acc_raw is %.2f' % (total_raw_acc))
             print('Test data acc_max is %.2f' % (total_max_acc))
             print('Test data acc_maj is %.2f' % (total_maj_acc))
-
+            print(predictions)
 
 
 
