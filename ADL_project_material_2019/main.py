@@ -11,6 +11,9 @@ logdir = '{cwd}/logs/log'.format(cwd=os.getcwd())
 pickle_in = open("music_genres_dataset.pkl", "rb")
 dataset = pd.DataFrame.from_dict(pickle.load(pickle_in))
 
+pickle_in_a = open("music_genres_dataset_aug.pkl", "rb")
+dataset_a = pd.DataFrame.from_dict(pickle.load(pickle_in_a))
+
 xavier_initializer = tf.contrib.layers.xavier_initializer(uniform=True)
 
 
@@ -26,32 +29,41 @@ def bias_variable(shape):
     return tf.Variable(initial, name='biases')
 
 
-def sample(data):
+def sample(data, data_a):
 
-    groups = [data for _, data in data.groupby('track_id')]
-    random.shuffle(groups)
-    dataset = pd.concat(groups).reset_index(drop=True)
+    groups   = [data for _, data in data.groupby('track_id')]
+    groups_a = [data for _, data in data_a.groupby('track_id')]
+    groups_merged = []
+    for I in range(len(groups)):
+        groups_merged.append([groups[I], groups_a[I]])
+
+    random.shuffle(groups_merged)
+    
+    groups = [x[0] for x in groups_merged]
+    groups_a = [x[1] for x in groups_merged]
+
+    dataset = pd.concat(groups).reset_index(drop=True)[:700]
+    dataset_a = pd.concat(groups_a).reset_index(drop=True)[700:]
 
     # dataset = data.sample(frac=1).reset_index(drop=True)
-    split = 9750
-    trainBatch  = list(np.row_stack(dataset[0:split - 1]["data"].values))
+    trainBatch  = list(np.row_stack(dataset_a["data"].values))
 
     trainBatch  = np.array(list(map(utils.melspectrogram, trainBatch)))
 
-    trainLabels = pd.get_dummies(dataset[0:split - 1]["labels"]).values
+    trainLabels = pd.get_dummies(dataset_a["labels"]).values
 
-    testBatch   = np.row_stack(dataset[split:]["data"].values)
+    testBatch   = np.row_stack(dataset["data"].values)
     testBatch  = np.array(list(map(utils.melspectrogram, testBatch)))
 
-    testLabels  = pd.get_dummies(dataset[split:]["labels"]).values
+    testLabels  = pd.get_dummies(dataset["labels"]).values
     # import ipdb; ipdb.set_trace()
     return trainBatch, testBatch, trainLabels, testLabels
 
 def leaky_relu(x):
-	try:
-		return tf.nn.leaky_relu(x, alpha=0.3)
-	except AttributeError:
-		return tf.nn.relu(x)
+        try:
+                return tf.nn.leaky_relu(x, alpha=0.3)
+        except AttributeError:
+                return tf.nn.relu(x)
 
 
 def deepnn(x):
@@ -257,7 +269,8 @@ def main(_):
             #place = tf.placeholder(tf.float32, shape=(9999, 80, 80))
 
             print("Starting data loading")
-            train, test, train_l, test_l = sample(dataset)
+            train, test, train_l, test_l = sample(dataset, dataset_a)
+            print(len(train))
             print("Finished data loading")
             # print(train_l)
 
@@ -271,23 +284,28 @@ def main(_):
             train_batch_size = 64
             test_batch_size  = 15
 
-            total_iteration_amount = 10000 * 100
+            total_iteration_amount = 10000 * 200
             epoch_am = int(ceil(total_iteration_amount / len(train)))
 
             print('Running ' + str(total_iteration_amount) + ' iteration over '
                 + str(epoch_am) + ' epochs')
 
-	    try:
+            train_placeholder = tf.placeholder(tf.float32, train.shape)
+            test_placeholder = tf.placeholder(tf.float32, test.shape)
+            train_l_placeholder = tf.placeholder(tf.float32, train_l.shape)
+            test_l_placeholder = tf.placeholder(tf.float32, test_l.shape)
+
+            try:
                 train_dataset = tf.data.Dataset.from_tensor_slices(
                         (
-                            tf.cast(train, tf.float32),
-                            tf.cast(train_l, tf.float32)
+                                train_placeholder,
+                                train_l_placeholder
                         )
                         ).batch(train_batch_size).shuffle(len(train)).repeat(epoch_am + 1)
                 test_dataset = tf.data.Dataset.from_tensor_slices(
                         (
-                            tf.cast(test, tf.float32),
-                            tf.cast(test_l, tf.float32)
+                                test_placeholder,
+                                test_l_placeholder
                         )
                         ).batch(test_batch_size)
 
@@ -296,14 +314,14 @@ def main(_):
             except AttributeError:
                 train_dataset = tf.contrib.data.Dataset.from_tensor_slices(
                         (
-                            tf.cast(train, tf.float32),
-                            tf.cast(train_l, tf.float32)
+                                train_placeholder,
+                                train_l_placeholder
                         )
                         ).batch(train_batch_size).shuffle(len(train)).repeat(epoch_am + 1)
                 test_dataset = tf.contrib.data.Dataset.from_tensor_slices(
                         (
-                            tf.cast(test, tf.float32),
-                            tf.cast(test_l, tf.float32)
+                                test_placeholder,
+                                test_l_placeholder
                         )
                         ).batch(test_batch_size)
 
@@ -358,7 +376,7 @@ def main(_):
                               tf.argmax( tf.reduce_mean(y, axis=0))),
                               tf.float32)#, [1]),
                               # tf.constant([15]))
-	    except AttributeError:
+            except AttributeError:
                 with tf.name_scope("acc_raw"):
                     acc_raw = tf.reduce_mean(
                               tf.cast(
@@ -398,7 +416,7 @@ def main(_):
             sess.run(tf.local_variables_initializer())
 
             print(x.shape, y.shape, y_hat.shape, train_dataset.output_shapes)
-            sess.run(train_init_op)
+            sess.run(train_init_op, feed_dict={train_placeholder:train, train_l_placeholder:train_l})
             for iteration in range (0, total_iteration_amount, train_batch_size):
                 if (iteration % (len(train)+1) == 0):
                     print( "-"*20 + 'Running Epoch ' + str(int(iteration / len(train))) + "-"*20 )
@@ -410,7 +428,7 @@ def main(_):
                 else:
                     sess.run(optimiser)
 
-            sess.run(test_init_op)
+            sess.run(test_init_op, feed_dict={test_placeholder:test, test_l_placeholder:test_l})
             total_raw_acc = 0;
             total_max_acc = 0;
             total_maj_acc = 0;
